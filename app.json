@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "The Cut v2.0 Preview",
+    "slug": "the-cut-v2-preview",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#F0F4F8"
+    },
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {},
+    "web": {}
+  }
+}
