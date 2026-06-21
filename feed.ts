@@ -5,9 +5,11 @@ export const API_BASE = 'https://the-cut-production-f9f7.up.railway.app';
 export const FEED_PAGE_SIZE = {
   news: 20,
   topVideos: 10,
-  topShorts: 10,
+  topShorts: 15,
   creatorVideos: 20,
 } as const;
+
+export const SHORTS_CAROUSEL_SIZE = 10;
 
 export type FeedBlock =
   | { id: string; type: 'news-compact'; article: Article; tag?: string }
@@ -219,7 +221,7 @@ export class FeedSession {
   private async topUpPools(): Promise<void> {
     const minNews = 18;
     const minVideos = 2;
-    const minShorts = 4;
+    const minShorts = 11;
     const minCreator = 8;
 
     const tasks: Promise<void>[] = [];
@@ -298,7 +300,7 @@ export class FeedSession {
 
   private takeShortsCarousel(tag: string, title: string): FeedBlock | null {
     const shorts: VideoItem[] = [];
-    while (shorts.length < 4 && this.topShortsQueue.length > 0) {
+    while (shorts.length < SHORTS_CAROUSEL_SIZE && this.topShortsQueue.length > 0) {
       const s = this.topShortsQueue.shift()!;
       this.shownVideos.add(s.videoId);
       shorts.push(s);
@@ -313,7 +315,10 @@ export class FeedSession {
     };
   }
 
-  private takeFullBleedShort(short: VideoItem, tag: string): FeedBlock {
+  private takeFullBleedShortBlock(tag: string): FeedBlock | null {
+    if (this.topShortsQueue.length === 0) return null;
+    const short = this.topShortsQueue.shift()!;
+    this.shownVideos.add(short.videoId);
     return {
       id: `c${this.cycleIndex}-full-bleed-${short.videoId}`,
       type: 'full-bleed-short',
@@ -411,10 +416,10 @@ export class FeedSession {
     if (tourFeatured) blocks.push(tourFeatured);
 
     const shortsBlock = this.takeShortsCarousel('Tour / media', 'Shorts');
-    if (shortsBlock && shortsBlock.type === 'shorts-carousel') {
-      blocks.push(shortsBlock);
-      blocks.push(this.takeFullBleedShort(shortsBlock.shorts[0], 'Tour / media · full-bleed'));
-    }
+    if (shortsBlock) blocks.push(shortsBlock);
+
+    const fullBleedBlock = this.takeFullBleedShortBlock('Tour / media · full-bleed');
+    if (fullBleedBlock) blocks.push(fullBleedBlock);
 
     // Slot 9: BBC again
     const bbc8 = this.takeBbcOrNews();

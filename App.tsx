@@ -12,7 +12,8 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { Article, VideoItem, logImageError, videoThumbnailUri } from './api';
+import { Article, VideoItem, fetchTourLatestVideos, logImageError, openYouTubeShort, openYouTubeVideo, videoThumbnailUri } from './api';
+import { ArticleReaderProvider, useOpenArticle } from './ArticleReader';
 import { FeedBlock, FeedSession } from './feed';
 
 // ---- Admiralty palette (light theme) ----
@@ -42,8 +43,13 @@ function timeAgo(iso: string) {
 // ---------- Reusable card components ----------
 
 function NewsCardCompact({ article, tag }: { article: Article; tag?: string }) {
+  const openArticle = useOpenArticle();
   return (
-    <TouchableOpacity style={styles.compactCard} activeOpacity={0.8}>
+    <TouchableOpacity
+      style={styles.compactCard}
+      activeOpacity={0.8}
+      onPress={() => openArticle(article.url, article.title)}
+    >
       {tag ? <Text style={styles.scaledTagLabel}>{tag}</Text> : null}
       <View style={[styles.compactCardRow, { marginTop: tag ? 8 : 0 }]}>
         <View style={styles.compactCardText}>
@@ -65,10 +71,19 @@ function NewsCardCompact({ article, tag }: { article: Article; tag?: string }) {
 }
 
 function FeaturedNewsCard({ article, tag }: { article: Article; tag?: string }) {
+  const openArticle = useOpenArticle();
   return (
-    <TouchableOpacity style={styles.featuredNewsCard} activeOpacity={0.8}>
+    <TouchableOpacity
+      style={styles.featuredNewsCard}
+      activeOpacity={0.8}
+      onPress={() => openArticle(article.url, article.title)}
+    >
       {article.urlToImage ? (
-        <Image source={{ uri: article.urlToImage }} style={styles.featuredImage} />
+        <Image
+          source={{ uri: article.urlToImage }}
+          style={styles.featuredImage}
+          resizeMode="cover"
+        />
       ) : (
         <View style={[styles.featuredImage, { backgroundColor: colors.midNavy }]} />
       )}
@@ -87,6 +102,7 @@ function FeaturedNewsCard({ article, tag }: { article: Article; tag?: string }) 
 }
 
 function TrendingList({ articles }: { articles: Article[] }) {
+  const openArticle = useOpenArticle();
   const dots = [colors.liveBlue, colors.eagleAmber, colors.birdieGreen, colors.bogeyRed];
   return (
     <View style={{ marginBottom: 18 }}>
@@ -94,8 +110,10 @@ function TrendingList({ articles }: { articles: Article[] }) {
       <Text style={styles.sectionTitleScaled}>Trending in golf</Text>
       <View style={styles.trendingBox}>
         {articles.slice(0, 4).map((a, i) => (
-          <View
+          <TouchableOpacity
             key={a.url}
+            activeOpacity={0.7}
+            onPress={() => openArticle(a.url, a.title)}
             style={[
               styles.trendingRow,
               i < articles.length - 1 ? styles.trendingDivider : null,
@@ -105,7 +123,7 @@ function TrendingList({ articles }: { articles: Article[] }) {
             <Text style={styles.trendingText} numberOfLines={2}>
               {a.title}
             </Text>
-          </View>
+          </TouchableOpacity>
         ))}
       </View>
     </View>
@@ -115,11 +133,16 @@ function TrendingList({ articles }: { articles: Article[] }) {
 function FeaturedVideoCard({ video, tag }: { video: VideoItem; tag?: string }) {
   const thumb = videoThumbnailUri(video);
   return (
-    <TouchableOpacity style={styles.featuredVideoCard} activeOpacity={0.8}>
+    <TouchableOpacity
+      style={styles.featuredVideoCard}
+      activeOpacity={0.8}
+      onPress={() => openYouTubeVideo(video.videoId)}
+    >
       <View>
         <Image
           source={{ uri: thumb }}
           style={styles.featuredVideoThumb}
+          resizeMode="cover"
           onError={logImageError('featured-video', thumb)}
         />
         <View style={styles.playButtonOverlay}>
@@ -149,7 +172,12 @@ function ShortsCarousel({ shorts, tag, title }: { shorts: VideoItem[]; tag: stri
         {shorts.map((s) => {
           const thumb = videoThumbnailUri(s);
           return (
-            <TouchableOpacity key={s.videoId} style={styles.shortCard} activeOpacity={0.8}>
+            <TouchableOpacity
+              key={s.videoId}
+              style={styles.shortCard}
+              activeOpacity={0.8}
+              onPress={() => openYouTubeShort(s.videoId)}
+            >
               <Image
                 source={{ uri: thumb }}
                 style={styles.shortThumb}
@@ -171,10 +199,15 @@ function ShortsCarousel({ shorts, tag, title }: { shorts: VideoItem[]; tag: stri
 function FullBleedShort({ short, tag }: { short: VideoItem; tag: string }) {
   const thumb = videoThumbnailUri(short);
   return (
-    <TouchableOpacity style={styles.fullBleedWrap} activeOpacity={0.85}>
+    <TouchableOpacity
+      style={styles.fullBleedWrap}
+      activeOpacity={0.85}
+      onPress={() => openYouTubeShort(short.videoId)}
+    >
       <Image
         source={{ uri: thumb }}
         style={styles.fullBleedImage}
+        resizeMode="cover"
         onError={logImageError('full-bleed-short', thumb)}
       />
       <View style={styles.fullBleedTagWrap}>
@@ -206,7 +239,12 @@ function VideoCarousel({ videos, tag, title, subtitle }: { videos: VideoItem[]; 
         {videos.map((v) => {
           const thumb = videoThumbnailUri(v);
           return (
-            <TouchableOpacity key={v.videoId} style={styles.carouselCard} activeOpacity={0.8}>
+            <TouchableOpacity
+              key={v.videoId}
+              style={styles.carouselCard}
+              activeOpacity={0.8}
+              onPress={() => openYouTubeVideo(v.videoId)}
+            >
               <Image
                 source={{ uri: thumb }}
                 style={styles.carouselThumb}
@@ -334,6 +372,7 @@ function FilterPills() {
 export default function App() {
   const sessionRef = useRef(new FeedSession());
   const [feedBlocks, setFeedBlocks] = useState<FeedBlock[]>([]);
+  const [tourLatestVideos, setTourLatestVideos] = useState<VideoItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [caughtUp, setCaughtUp] = useState(false);
@@ -343,10 +382,20 @@ export default function App() {
   useEffect(() => {
     async function init() {
       try {
-        await sessionRef.current.ensureInitialLoad();
+        const [, tourLatest] = await Promise.allSettled([
+          sessionRef.current.ensureInitialLoad(),
+          fetchTourLatestVideos(15),
+        ]);
+
         const { blocks, caughtUp: done } = await sessionRef.current.appendNextCycle();
         setFeedBlocks(blocks);
         setCaughtUp(done);
+
+        if (tourLatest.status === 'fulfilled') {
+          setTourLatestVideos(tourLatest.value);
+        } else {
+          console.warn('[The Cut] tour-latest-videos failed:', tourLatest.reason);
+        }
       } catch (e: any) {
         setError(e?.message || 'Failed to load');
       } finally {
@@ -388,42 +437,54 @@ export default function App() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
-      <FlatList
-        data={feedBlocks}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.feedBlockWrap}>
-            <FeedBlockItem block={item} />
-          </View>
-        )}
-        ListHeaderComponent={
-          <>
-            <Header />
-            <TourCircles />
-            <FilterPills />
-            {error ? (
-              <Text style={[styles.feedError, { paddingHorizontal: 16 }]}>
-                Couldn't reach the backend: {error}
-              </Text>
-            ) : null}
-          </>
-        }
-        ListFooterComponent={
-          loadingMore && !caughtUp ? (
-            <View style={styles.footerLoader}>
-              <ActivityIndicator size="small" color={colors.liveBlue} />
-              <Text style={styles.footerLoaderText}>Loading more…</Text>
+    <ArticleReaderProvider>
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar style="dark" />
+        <FlatList
+          data={feedBlocks}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <View style={styles.feedBlockWrap}>
+              <FeedBlockItem block={item} />
             </View>
-          ) : null
-        }
-        contentContainerStyle={styles.feedContent}
-        showsVerticalScrollIndicator={false}
-        onEndReached={handleEndReached}
-        onEndReachedThreshold={0.35}
-      />
-    </SafeAreaView>
+          )}
+          ListHeaderComponent={
+            <>
+              <Header />
+              <TourCircles />
+              <FilterPills />
+              {tourLatestVideos.length > 0 ? (
+                <View style={styles.tourLatestCarouselWrap}>
+                  <VideoCarousel
+                    videos={tourLatestVideos}
+                    tag="Tour"
+                    title="Latest from the Tours"
+                    subtitle="Pro tour coverage and highlights"
+                  />
+                </View>
+              ) : null}
+              {error ? (
+                <Text style={[styles.feedError, { paddingHorizontal: 16 }]}>
+                  Couldn't reach the backend: {error}
+                </Text>
+              ) : null}
+            </>
+          }
+          ListFooterComponent={
+            loadingMore && !caughtUp ? (
+              <View style={styles.footerLoader}>
+                <ActivityIndicator size="small" color={colors.liveBlue} />
+                <Text style={styles.footerLoaderText}>Loading more…</Text>
+              </View>
+            ) : null
+          }
+          contentContainerStyle={styles.feedContent}
+          showsVerticalScrollIndicator={false}
+          onEndReached={handleEndReached}
+          onEndReachedThreshold={0.35}
+        />
+      </SafeAreaView>
+    </ArticleReaderProvider>
   );
 }
 
@@ -531,7 +592,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 14,
   },
-  featuredImage: { width: '100%', height: 160 },
+  featuredImage: { width: '100%', aspectRatio: 16 / 9 },
   featuredTitle: { fontSize: 18, fontWeight: '700', color: colors.navy, lineHeight: 24, marginTop: 4 },
 
   sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.navy, marginTop: 6, marginBottom: 2 },
@@ -560,7 +621,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 14,
   },
-  featuredVideoThumb: { width: '100%', height: 150, backgroundColor: colors.midNavy },
+  featuredVideoThumb: { width: '100%', aspectRatio: 16 / 9, backgroundColor: colors.midNavy },
   playButtonOverlay: {
     position: 'absolute',
     top: '50%',
@@ -582,7 +643,7 @@ const styles = StyleSheet.create({
 
   fullBleedWrap: {
     width: '100%',
-    height: 480,
+    aspectRatio: 9 / 16,
     borderRadius: 14,
     overflow: 'hidden',
     backgroundColor: colors.midNavy,
@@ -618,12 +679,13 @@ const styles = StyleSheet.create({
   fullBleedCaption: { color: '#FFFFFF', fontSize: 14, fontWeight: '700', lineHeight: 19 },
   fullBleedMeta: { color: '#D8DEE6', fontSize: 11, marginTop: 4 },
 
-  carouselCard: { width: 213, marginRight: 13 },
-  carouselThumb: { width: 213, height: 120, borderRadius: 13, backgroundColor: colors.midNavy },
-  carouselTitle: { fontSize: 15, fontWeight: '600', color: colors.navy, marginTop: 9, lineHeight: 20 },
-  carouselMeta: { fontSize: 13, color: colors.coolGrey, marginTop: 3 },
+  carouselCard: { width: 240, marginRight: 15 },
+  carouselThumb: { width: 240, height: 135, borderRadius: 15, backgroundColor: colors.midNavy },
+  carouselTitle: { fontSize: 17, fontWeight: '600', color: colors.navy, marginTop: 10, lineHeight: 23 },
+  carouselMeta: { fontSize: 15, color: colors.coolGrey, marginTop: 4 },
 
   feedContent: { paddingHorizontal: 16, paddingBottom: 24 },
+  tourLatestCarouselWrap: { marginBottom: 4 },
   feedBlockWrap: { marginBottom: 0 },
   feedError: { color: colors.bogeyRed, marginBottom: 12 },
   footerLoader: {

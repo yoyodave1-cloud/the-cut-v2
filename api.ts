@@ -1,3 +1,7 @@
+import { Linking } from 'react-native';
+
+export const API_BASE = 'https://the-cut-production-f9f7.up.railway.app';
+
 export type Article = {
   title: string;
   description?: string;
@@ -78,4 +82,30 @@ export function logImageError(label: string, uri: string) {
   return () => {
     console.warn(`[The Cut] Image failed to load (${label}):`, uri);
   };
+}
+
+export function youtubeWatchUrl(videoId: string): string {
+  return `https://www.youtube.com/watch?v=${videoId}`;
+}
+
+export function youtubeShortsUrl(videoId: string): string {
+  return `https://www.youtube.com/shorts/${videoId}`;
+}
+
+export function openYouTubeVideo(videoId: string): void {
+  if (videoId) {
+    Linking.openURL(youtubeWatchUrl(videoId));
+  }
+}
+
+export function openYouTubeShort(videoId: string): void {
+  if (videoId) {
+    Linking.openURL(youtubeShortsUrl(videoId));
+  }
+}
+
+export async function fetchTourLatestVideos(limit = 15): Promise<VideoItem[]> {
+  const res = await fetch(`${API_BASE}/tour-latest-videos?limit=${limit}`);
+  if (!res.ok) throw new Error(`tour-latest-videos failed (${res.status})`);
+  return normalizeVideoList(await res.json());
 }
