@@ -1,4 +1,4 @@
-import { Article, VideoItem, normalizeVideoList } from './api';
+import { Article, TOUR_LATEST_HEADER_LIMIT, VideoItem, normalizeVideoList } from './api';
 
 export const API_BASE = 'https://the-cut-production-f9f7.up.railway.app';
 
@@ -6,7 +6,8 @@ export const FEED_PAGE_SIZE = {
   news: 20,
   topVideos: 10,
   topShorts: 15,
-  creatorVideos: 20,
+  tourHighlights: 15,
+  interviews: 20,
 } as const;
 
 export const SHORTS_CAROUSEL_SIZE = 10;
@@ -32,7 +33,8 @@ type PaginationCursor = {
   news: { page: number; exhausted: boolean; totalResults?: number };
   topVideos: { offset: number; exhausted: boolean };
   topShorts: { offset: number; exhausted: boolean };
-  creatorVideos: { offset: number; exhausted: boolean };
+  tourHighlights: { offset: number; exhausted: boolean };
+  interviews: { offset: number; exhausted: boolean };
 };
 
 async function fetchNewsPage(page: number): Promise<{ articles: Article[]; totalResults?: number }> {
@@ -58,10 +60,19 @@ async function fetchTopShortsPage(offset: number): Promise<VideoItem[]> {
   return normalizeVideoList(await res.json());
 }
 
-async function fetchCreatorVideosPage(offset: number): Promise<VideoItem[]> {
+async function fetchInterviewVideosPage(offset: number): Promise<VideoItem[]> {
   const res = await fetch(
-    `${API_BASE}/creator-videos?limit=${FEED_PAGE_SIZE.creatorVideos}&offset=${offset}`,
+    `${API_BASE}/interview-videos?limit=${FEED_PAGE_SIZE.interviews}&offset=${offset}`,
   );
+  if (!res.ok) throw new Error(`interview-videos failed (${res.status})`);
+  return normalizeVideoList(await res.json());
+}
+
+async function fetchTourHighlightsPage(offset: number): Promise<VideoItem[]> {
+  const res = await fetch(
+    `${API_BASE}/tour-latest-videos?limit=${FEED_PAGE_SIZE.tourHighlights}&offset=${offset}`,
+  );
+  if (!res.ok) throw new Error(`tour-latest-videos failed (${res.status})`);
   return normalizeVideoList(await res.json());
 }
 
@@ -91,13 +102,15 @@ export class FeedSession {
   private bbcQueue: Article[] = [];
   private topVideosQueue: VideoItem[] = [];
   private topShortsQueue: VideoItem[] = [];
-  private creatorVideosQueue: VideoItem[] = [];
+  private tourHighlightsQueue: VideoItem[] = [];
+  private interviewsQueue: VideoItem[] = [];
 
   readonly pagination: PaginationCursor = {
     news: { page: 0, exhausted: false },
     topVideos: { offset: 0, exhausted: false },
     topShorts: { offset: 0, exhausted: false },
-    creatorVideos: { offset: 0, exhausted: false },
+    tourHighlights: { offset: TOUR_LATEST_HEADER_LIMIT, exhausted: false },
+    interviews: { offset: 0, exhausted: false },
   };
 
   private cycleIndex = 0;
@@ -114,7 +127,8 @@ export class FeedSession {
     return new Set([
       ...this.topVideosQueue.map((v) => v.videoId),
       ...this.topShortsQueue.map((v) => v.videoId),
-      ...this.creatorVideosQueue.map((v) => v.videoId),
+      ...this.tourHighlightsQueue.map((v) => v.videoId),
+      ...this.interviewsQueue.map((v) => v.videoId),
     ]);
   }
 
@@ -123,7 +137,8 @@ export class FeedSession {
       this.refillNews(),
       this.refillTopVideos(),
       this.refillTopShorts(),
-      this.refillCreatorVideos(),
+      this.refillTourHighlights(),
+      this.refillInterviews(),
     ]);
   }
 
@@ -133,12 +148,14 @@ export class FeedSession {
       p.news.exhausted &&
       p.topVideos.exhausted &&
       p.topShorts.exhausted &&
-      p.creatorVideos.exhausted &&
+      p.tourHighlights.exhausted &&
+      p.interviews.exhausted &&
       this.newsQueue.length === 0 &&
       this.bbcQueue.length === 0 &&
       this.topVideosQueue.length === 0 &&
       this.topShortsQueue.length === 0 &&
-      this.creatorVideosQueue.length === 0
+      this.tourHighlightsQueue.length === 0 &&
+      this.interviewsQueue.length === 0
     );
   }
 
@@ -201,20 +218,37 @@ export class FeedSession {
     }
   }
 
-  private async refillCreatorVideos(): Promise<void> {
-    if (this.pagination.creatorVideos.exhausted) return;
-    const offset = this.pagination.creatorVideos.offset;
-    const items = await fetchCreatorVideosPage(offset);
+  private async refillTourHighlights(): Promise<void> {
+    if (this.pagination.tourHighlights.exhausted) return;
+    const offset = this.pagination.tourHighlights.offset;
+    const items = await fetchTourHighlightsPage(offset);
     const queued = this.queuedVideoIds();
     const fresh = dedupeVideos(items, this.shownVideos, queued);
     if (fresh.length === 0) {
-      this.pagination.creatorVideos.exhausted = true;
+      this.pagination.tourHighlights.exhausted = true;
       return;
     }
-    this.creatorVideosQueue.push(...fresh);
-    this.pagination.creatorVideos.offset += items.length;
-    if (items.length < FEED_PAGE_SIZE.creatorVideos) {
-      this.pagination.creatorVideos.exhausted = true;
+    this.tourHighlightsQueue.push(...fresh);
+    this.pagination.tourHighlights.offset += items.length;
+    if (items.length < FEED_PAGE_SIZE.tourHighlights) {
+      this.pagination.tourHighlights.exhausted = true;
+    }
+  }
+
+  private async refillInterviews(): Promise<void> {
+    if (this.pagination.interviews.exhausted) return;
+    const offset = this.pagination.interviews.offset;
+    const items = await fetchInterviewVideosPage(offset);
+    const queued = this.queuedVideoIds();
+    const fresh = dedupeVideos(items, this.shownVideos, queued);
+    if (fresh.length === 0) {
+      this.pagination.interviews.exhausted = true;
+      return;
+    }
+    this.interviewsQueue.push(...fresh);
+    this.pagination.interviews.offset += items.length;
+    if (items.length < FEED_PAGE_SIZE.interviews) {
+      this.pagination.interviews.exhausted = true;
     }
   }
 
@@ -222,7 +256,8 @@ export class FeedSession {
     const minNews = 18;
     const minVideos = 2;
     const minShorts = 11;
-    const minCreator = 8;
+    const minTourHighlights = 10;
+    const minInterviews = 8;
 
     const tasks: Promise<void>[] = [];
     if (this.newsQueue.length + this.bbcQueue.length < minNews && !this.pagination.news.exhausted) {
@@ -234,8 +269,14 @@ export class FeedSession {
     if (this.topShortsQueue.length < minShorts && !this.pagination.topShorts.exhausted) {
       tasks.push(this.refillTopShorts());
     }
-    if (this.creatorVideosQueue.length < minCreator && !this.pagination.creatorVideos.exhausted) {
-      tasks.push(this.refillCreatorVideos());
+    if (
+      this.tourHighlightsQueue.length < minTourHighlights &&
+      !this.pagination.tourHighlights.exhausted
+    ) {
+      tasks.push(this.refillTourHighlights());
+    }
+    if (this.interviewsQueue.length < minInterviews && !this.pagination.interviews.exhausted) {
+      tasks.push(this.refillInterviews());
     }
     await Promise.all(tasks);
   }
@@ -327,42 +368,42 @@ export class FeedSession {
     };
   }
 
-  private takeCreatorCarousels(): FeedBlock[] {
-    const blocks: FeedBlock[] = [];
-    if (this.creatorVideosQueue.length === 0) return blocks;
+  private takeTourHighlightsCarousel(): FeedBlock | null {
+    const videos: VideoItem[] = [];
+    while (videos.length < FEED_PAGE_SIZE.tourHighlights && this.tourHighlightsQueue.length > 0) {
+      const v = this.tourHighlightsQueue.shift()!;
+      this.shownVideos.add(v.videoId);
+      videos.push(v);
+    }
+    if (videos.length === 0) return null;
+    return {
+      id: `c${this.cycleIndex}-tour-highlights-${videos[0].videoId}`,
+      type: 'video-carousel',
+      videos,
+      tag: 'Tour',
+      title: 'Tour highlights',
+      subtitle: 'Best of the last 7 days',
+    };
+  }
 
-    const batch = this.creatorVideosQueue.splice(
+  private takeCreatorInterviewsCarousel(): FeedBlock | null {
+    if (this.interviewsQueue.length === 0) return null;
+
+    const batch = this.interviewsQueue.splice(
       0,
-      Math.min(FEED_PAGE_SIZE.creatorVideos, this.creatorVideosQueue.length),
+      Math.min(FEED_PAGE_SIZE.interviews, this.interviewsQueue.length),
     );
     batch.forEach((v) => this.shownVideos.add(v.videoId));
+    if (batch.length === 0) return null;
 
-    const nonShort = batch.filter((v) => !v.title?.toLowerCase().includes('short'));
-    const half = Math.ceil(nonShort.length / 2) || Math.ceil(batch.length / 2);
-    const highlights = (nonShort.length ? nonShort : batch).slice(0, half);
-    const interviews = (nonShort.length ? nonShort : batch).slice(half);
-
-    if (highlights.length) {
-      blocks.push({
-        id: `c${this.cycleIndex}-creator-highlights-${highlights[0].videoId}`,
-        type: 'video-carousel',
-        videos: highlights,
-        tag: 'Creator',
-        title: 'Creator highlights',
-        subtitle: 'Best of the last 7 days',
-      });
-    }
-    if (interviews.length) {
-      blocks.push({
-        id: `c${this.cycleIndex}-creator-interviews-${interviews[0].videoId}`,
-        type: 'video-carousel',
-        videos: interviews,
-        tag: 'Creator',
-        title: 'Interviews',
-        subtitle: 'Straight from the players',
-      });
-    }
-    return blocks;
+    return {
+      id: `c${this.cycleIndex}-creator-interviews-${batch[0].videoId}`,
+      type: 'video-carousel',
+      videos: batch,
+      tag: 'Creator',
+      title: 'Interviews',
+      subtitle: 'Press conferences and player interviews',
+    };
   }
 
   private takeBbcOrNews(): Article | null {
@@ -439,8 +480,12 @@ export class FeedSession {
     pushCompact();
     pushCompact();
 
-    // Slots 13–14: creator carousels
-    blocks.push(...this.takeCreatorCarousels());
+    // Slots 13–14: tour highlights + creator interviews
+    const tourHighlights = this.takeTourHighlightsCarousel();
+    if (tourHighlights) blocks.push(tourHighlights);
+
+    const creatorInterviews = this.takeCreatorInterviewsCarousel();
+    if (creatorInterviews) blocks.push(creatorInterviews);
 
     // Slot 15: creator featured video
     const creatorFeatured = this.takeFeaturedVideo('Creator');

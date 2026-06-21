@@ -12,7 +12,16 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { Article, VideoItem, fetchTourLatestVideos, logImageError, openYouTubeShort, openYouTubeVideo, videoThumbnailUri } from './api';
+import {
+  Article,
+  TOUR_LATEST_HEADER_LIMIT,
+  VideoItem,
+  fetchTourLatestVideos,
+  logImageError,
+  openYouTubeShort,
+  openYouTubeVideo,
+  videoThumbnailUri,
+} from './api';
 import { ArticleReaderProvider, useOpenArticle } from './ArticleReader';
 import { FeedBlock, FeedSession } from './feed';
 
@@ -384,7 +393,7 @@ export default function App() {
       try {
         const [, tourLatest] = await Promise.allSettled([
           sessionRef.current.ensureInitialLoad(),
-          fetchTourLatestVideos(15),
+          fetchTourLatestVideos(TOUR_LATEST_HEADER_LIMIT),
         ]);
 
         const { blocks, caughtUp: done } = await sessionRef.current.appendNextCycle();

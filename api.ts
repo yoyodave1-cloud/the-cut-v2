@@ -104,8 +104,14 @@ export function openYouTubeShort(videoId: string): void {
   }
 }
 
-export async function fetchTourLatestVideos(limit = 15): Promise<VideoItem[]> {
-  const res = await fetch(`${API_BASE}/tour-latest-videos?limit=${limit}`);
+/** Matches header carousel fetch in App.tsx — feed tour highlights start after this. */
+export const TOUR_LATEST_HEADER_LIMIT = 15;
+
+export async function fetchTourLatestVideos(
+  limit = TOUR_LATEST_HEADER_LIMIT,
+  offset = 0,
+): Promise<VideoItem[]> {
+  const res = await fetch(`${API_BASE}/tour-latest-videos?limit=${limit}&offset=${offset}`);
   if (!res.ok) throw new Error(`tour-latest-videos failed (${res.status})`);
   return normalizeVideoList(await res.json());
 }
