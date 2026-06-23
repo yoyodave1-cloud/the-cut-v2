@@ -231,21 +231,17 @@ export default function CreatorProfilePage() {
         </View>
 
         <View style={styles.videoTabsWrap}>
-          <Pressable
-            onPress={() => onPressVideoTab('videos')}
-            style={[styles.videoTabChip, videoTab === 'videos' ? styles.videoTabChipActive : null]}
-          >
+          <Pressable onPress={() => onPressVideoTab('videos')} style={styles.videoTab}>
             <Text style={[styles.videoTabText, videoTab === 'videos' ? styles.videoTabTextActive : null]}>
-              Latest Videos
+              Videos
             </Text>
+            {videoTab === 'videos' ? <View style={styles.videoTabIndicator} /> : null}
           </Pressable>
-          <Pressable
-            onPress={() => onPressVideoTab('shorts')}
-            style={[styles.videoTabChip, videoTab === 'shorts' ? styles.videoTabChipActive : null]}
-          >
+          <Pressable onPress={() => onPressVideoTab('shorts')} style={styles.videoTab}>
             <Text style={[styles.videoTabText, videoTab === 'shorts' ? styles.videoTabTextActive : null]}>
               Shorts
             </Text>
+            {videoTab === 'shorts' ? <View style={styles.videoTabIndicator} /> : null}
           </Pressable>
         </View>
 
@@ -417,31 +413,31 @@ const styles = StyleSheet.create({
     marginHorizontal: PAD,
     marginTop: 8,
     marginBottom: 4,
-    gap: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  videoTabChip: {
+  videoTab: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: 12,
-    paddingHorizontal: 4,
-    backgroundColor: 'transparent',
-  },
-  videoTabChipActive: {
-    backgroundColor: colors.liveBlue,
-    borderColor: colors.liveBlue,
+    paddingVertical: 10,
+    position: 'relative',
   },
   videoTabText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 20,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 17,
     color: colors.mutedGrey,
     textAlign: 'center',
   },
   videoTabTextActive: {
-    color: '#FFFFFF',
+    color: colors.navy,
+  },
+  videoTabIndicator: {
+    position: 'absolute',
+    bottom: -1,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: colors.liveBlue,
   },
   sectionHeadRow: {
     flexDirection: 'row',

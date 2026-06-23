@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useFonts } from 'expo-font';
-import { Inter_700Bold } from '@expo-google-fonts/inter';
+import { Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import { PlatformPressable } from '@react-navigation/elements';
 import { NavigationContainer } from '@react-navigation/native';
 import {
@@ -72,7 +72,7 @@ function MainTabs() {
 }
 
 export default function App() {
-  const [fontsLoaded] = useFonts({ Inter_700Bold });
+  const [fontsLoaded] = useFonts({ Inter_600SemiBold, Inter_700Bold });
 
   if (!fontsLoaded) {
     return null;
