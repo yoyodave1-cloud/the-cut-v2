@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   SafeAreaView,
   FlatList,
@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  ScrollView,
+  type ListRenderItem,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,9 +24,17 @@ import {
   ShortsCarousel,
   VideoCarousel,
 } from './components/VideoFeedCards';
+import UpcomingEventTile from './components/UpcomingEventTile';
 import { ArticleReaderProvider, useOpenArticle } from './ArticleReader';
 import { FeedBlock, FeedSession } from './feed';
 import { colors } from './constants/colors';
+import {
+  EVENT_TILE_STRIDE,
+  type UpcomingTourEvent,
+  getMergedUpcomingTourEvents,
+  resolveEventLeaderboardUrl,
+  upcomingEventCurrentOrNextIndex,
+} from './lib/upcomingTourEvents';
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -176,8 +184,12 @@ function Header() {
   return (
     <View style={styles.header}>
       <View style={styles.headerLeft}>
-        <View style={styles.logoBox}>
-          <Text style={styles.logoText}>TC</Text>
+        <View style={styles.homeLogoClip}>
+          <Image
+            source={require('./assets/logo-header-03.png')}
+            style={styles.homeLogo}
+            resizeMode="contain"
+          />
         </View>
         <Text style={styles.strapline} numberOfLines={1}>
           Pro golf · Creator golf · All golf
@@ -190,25 +202,64 @@ function Header() {
   );
 }
 
-const TOURS = [
-  { label: 'PGA\nTour', name: 'PGA Tour' },
-  { label: 'DP\nWorld', name: 'DP World' },
-  { label: 'LIV', name: 'LIV Golf' },
-  { label: 'The\nOpen', name: 'The Open', dimmed: true },
-];
+function UpcomingEventsStrip() {
+  const openArticle = useOpenArticle();
+  const events = useMemo(() => getMergedUpcomingTourEvents(), []);
+  const listRef = useRef<FlatList<UpcomingTourEvent>>(null);
 
-function TourCircles() {
+  const getItemLayout = useCallback(
+    (_: ArrayLike<UpcomingTourEvent> | null | undefined, index: number) => ({
+      length: EVENT_TILE_STRIDE,
+      offset: EVENT_TILE_STRIDE * index,
+      index,
+    }),
+    [],
+  );
+
+  useEffect(() => {
+    if (events.length === 0) return;
+    const target = upcomingEventCurrentOrNextIndex(events, new Date());
+    const id = requestAnimationFrame(() => {
+      listRef.current?.scrollToIndex({
+        index: target,
+        viewPosition: 0,
+        animated: false,
+      });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [events]);
+
+  const renderEvent: ListRenderItem<UpcomingTourEvent> = useCallback(
+    ({ item }) => (
+      <UpcomingEventTile
+        item={item}
+        onPress={() => openArticle(resolveEventLeaderboardUrl(item), item.fullName)}
+      />
+    ),
+    [openArticle],
+  );
+
+  if (events.length === 0) return null;
+
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.toursRow}>
-      {TOURS.map((t) => (
-        <View key={t.name} style={[styles.tourItem, t.dimmed ? { opacity: 0.5 } : null]}>
-          <View style={styles.tourCircle}>
-            <Text style={styles.tourCircleText}>{t.label}</Text>
-          </View>
-          <Text style={styles.tourLabel}>{t.name}</Text>
-        </View>
-      ))}
-    </ScrollView>
+    <FlatList
+      ref={listRef}
+      horizontal
+      data={events}
+      keyExtractor={(item) => item.id}
+      renderItem={renderEvent}
+      showsHorizontalScrollIndicator={false}
+      removeClippedSubviews
+      style={styles.eventsRow}
+      contentContainerStyle={styles.eventsRowContent}
+      getItemLayout={getItemLayout}
+      onScrollToIndexFailed={(info) => {
+        listRef.current?.scrollToOffset({
+          offset: info.averageItemLength * info.index,
+          animated: false,
+        });
+      }}
+    />
   );
 }
 
@@ -216,17 +267,21 @@ function FilterPills() {
   const [active, setActive] = useState('For you');
   const pills = ['For you', 'Creators', 'Pro news'];
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillsRow}>
-      {pills.map((p) => (
+    <FlatList
+      horizontal
+      data={pills}
+      keyExtractor={(p) => p}
+      showsHorizontalScrollIndicator={false}
+      style={styles.pillsRow}
+      renderItem={({ item: p }) => (
         <TouchableOpacity
-          key={p}
           onPress={() => setActive(p)}
           style={[styles.pill, active === p ? styles.pillActive : null]}
         >
           <Text style={active === p ? styles.pillTextActive : styles.pillText}>{p}</Text>
         </TouchableOpacity>
-      ))}
-    </ScrollView>
+      )}
+    />
   );
 }
 
@@ -314,7 +369,7 @@ export default function HomeScreen() {
           ListHeaderComponent={
             <>
               <Header />
-              <TourCircles />
+              <UpcomingEventsStrip />
               <FilterPills />
               {tourLatestVideos.length > 0 ? (
                 <View style={styles.tourLatestCarouselWrap}>
@@ -365,16 +420,19 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 },
-  logoBox: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    backgroundColor: colors.navy,
+  homeLogoClip: {
+    width: 56,
+    height: 56,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logoText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
-  strapline: { color: colors.coolGrey, fontSize: 13, fontWeight: '500', flexShrink: 1 },
+  homeLogo: {
+    width: 56,
+    height: 56,
+    transform: [{ scale: 1.85 }],
+  },
+  strapline: { color: colors.coolGrey, fontSize: 15, fontWeight: '500', flexShrink: 1 },
   profileButton: {
     width: 32,
     height: 32,
@@ -384,21 +442,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  toursRow: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 6 },
-  tourItem: { width: 64, alignItems: 'center', marginRight: 10 },
-  tourCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    borderWidth: 1.5,
-    borderColor: colors.mutedGrey,
-    backgroundColor: colors.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  tourCircleText: { fontSize: 10, fontWeight: '600', color: colors.navy, textAlign: 'center' },
-  tourLabel: { fontSize: 10, color: colors.coolGrey },
+  eventsRow: { flexGrow: 0 },
+  eventsRowContent: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 6 },
   pillsRow: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16 },
   pill: {
     paddingHorizontal: 16,
