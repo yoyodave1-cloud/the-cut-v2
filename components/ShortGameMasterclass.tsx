@@ -143,14 +143,26 @@ export default function ShortGameMasterclass({
 
   return (
     <View style={styles.wrapper}>
-      <MainTopicPills
-        selectedMainTopic={selectedMainTopic}
-        onSelect={setSelectedMainTopic}
-      />
-
       <View style={styles.section}>
-        <Text style={styles.mainTitle}>Creator Content Masterclass</Text>
-        <Text style={styles.subtitle}>Lessons from the best instructors on YouTube</Text>
+        <View style={styles.titleRow}>
+          <View style={styles.titleLogoClip}>
+            <Image
+              source={require('../assets/logo-header-03.png')}
+              style={styles.titleLogo}
+              resizeMode="contain"
+            />
+          </View>
+          <Text style={styles.mainTitle}>Lesson Library</Text>
+        </View>
+        <Text style={styles.subtitle}>
+          We've trawled YouTube for the best golf instruction out there, so you don't have to.
+          Hand-picked lessons for every part of your game — just pick a topic below.
+        </Text>
+
+        <MainTopicPills
+          selectedMainTopic={selectedMainTopic}
+          onSelect={setSelectedMainTopic}
+        />
 
         {(activeGroup?.subTopics ?? []).map((subTopic) => (
           <TopicCarousel
@@ -169,7 +181,7 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   pillRow: {
-    marginBottom: 10,
+    marginBottom: 14,
   },
   pillRowContent: {
     paddingRight: 4,
@@ -178,8 +190,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: SECTION_COLORS.border,
     borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 17,
+    paddingVertical: 9,
     marginRight: 8,
     backgroundColor: SECTION_COLORS.card,
   },
@@ -188,7 +200,7 @@ const styles = StyleSheet.create({
     borderColor: SECTION_COLORS.heading,
   },
   pillText: {
-    fontSize: 12,
+    fontSize: 15,
     fontWeight: '600',
     color: SECTION_COLORS.heading,
   },
@@ -203,15 +215,33 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 14,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 6,
+  },
+  titleLogoClip: {
+    width: 44,
+    height: 44,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  titleLogo: {
+    width: 44,
+    height: 44,
+    transform: [{ scale: 1.85 }],
+  },
   mainTitle: {
-    fontSize: 20,
+    fontSize: 25,
     fontWeight: '700',
     color: SECTION_COLORS.heading,
-    marginBottom: 4,
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: 16,
     color: SECTION_COLORS.muted,
+    lineHeight: 22,
     marginBottom: 14,
   },
   topicBlock: {
