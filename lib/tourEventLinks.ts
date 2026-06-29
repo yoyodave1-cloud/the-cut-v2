@@ -1,4 +1,7 @@
+import { pgaEventPhase } from './leaderboard';
 import type { TourSeasonEvent } from './tourSchedules2026';
+
+const PGA_LIVE_LEADERBOARD_URL = 'https://www.pgatour.com/leaderboard';
 const PGA_EVENT_LINKS: Record<string, { tournId: string; slug: string }> = {
   'pga-2026-sony-open-in-hawaii': { tournId: '006', slug: 'sony-open-in-hawaii' },
   'pga-2026-the-american-express': { tournId: '002', slug: 'the-american-express' },
@@ -64,7 +67,7 @@ const DP_EVENT_SLUGS: Record<string, string> = {
   'dpwt-2026-soudal-open': 'soudal-open-2026',
   'dpwt-2026-austrian-alpine-open': 'austrian-alpine-open-2026',
   'dpwt-2026-klm-open': 'klm-open-2026',
-  'dpwt-2026-italian-open': 'italian-open-2026',
+  'dpwt-2026-italian-open': 'open-d-italia-2026',
   'dpwt-2026-bmw-intl-open': 'bmw-international-open-2026',
   'dpwt-2026-genesis-scottish-open': 'genesis-scottish-open-2026',
   'dpwt-2026-isco-championship': 'isco-championship-2026',
@@ -83,10 +86,71 @@ const DP_EVENT_SLUGS: Record<string, string> = {
   'dpwt-2026-tour-championship-dubai': 'dp-world-tour-championship-2026',
 };
 
+/**
+ * lpga.com tournament path slugs (…/tournaments/{slug}/leaderboard).
+ * Manually verified — do not derive from event id.
+ */
+const LPGA_EVENT_SLUGS: Record<string, string> = {
+  'lpga-2026-hilton-grand-vacations-toc': 'hilton-grand-vacations-tournament-of-champions',
+  'lpga-2026-honda-lpga-thailand': 'honda-lpga-thailand',
+  'lpga-2026-hsbc-womens-world': 'hsbc-womens-world-championship',
+  'lpga-2026-blue-bay-lpga': 'blue-bay-lpga',
+  'lpga-2026-fortinet-founders-cup': 'fortinet-founders-cup',
+  'lpga-2026-ford-championship': 'ford-championship',
+  'lpga-2026-aramco-championship': 'aramco-championship',
+  'lpga-2026-jm-eagle-la-championship': 'jm-eagle-la-championship',
+  'lpga-2026-chevron-championship': 'chevron-championship',
+  'lpga-2026-mexico-riviera-maya': 'riviera-maya-open-at-mayakoba',
+  'lpga-2026-mizuho-americas-open': 'mizuho--americas-open',
+  'lpga-2026-kroger-queen-city': 'kroger-queen-city-championship',
+  'lpga-2026-shoprite-lpga': 'shoprite-lpga-powered-by-wakefern',
+  'lpga-2026-us-womens-open': 'us-womens-open',
+  'lpga-2026-dow-championship': 'dow-championship',
+  'lpga-2026-meijer-lpga-classic': 'meijer-lpga-classic-for-simply-give',
+  'lpga-2026-kpmg-womens-pga': 'kpmgwomenspgachampionship',
+  'lpga-2026-amundi-evian': 'the-evian-championship',
+  'lpga-2026-womens-scottish-open': 'isps-handa-womens-scottish-open',
+  'lpga-2026-aig-womens-open': 'aigwomensopen',
+  'lpga-2026-portland-classic': 'portland-classic',
+  'lpga-2026-cpkc-womens-open': 'cpkc-womens-open',
+  'lpga-2026-fm-championship': 'fm-championship',
+  'lpga-2026-solheim-cup': 'the-solheim-cup',
+  'lpga-2026-walmart-nw-arkansas': 'walmartnwarkansaschampionshippresentedbypg',
+  'lpga-2026-lotte-championship': 'lotte-championship',
+  'lpga-2026-buick-lpga-shanghai': 'buick-lpga-shanghai',
+  'lpga-2026-bmw-ladies-championship': 'bmw-lpga-championship',
+  'lpga-2026-maybank-championship': 'maybank-championship',
+  'lpga-2026-toto-japan-classic': 'toto-japan-classic',
+  'lpga-2026-the-annika': 'the-annika-driven-by-gainbridge-at-pelican',
+  'lpga-2026-cme-tour-championship': 'cme-group-tour-championship',
+  'lpga-2026-grant-thornton-invitational': 'grant-thornton-invitational',
+};
+
+export function lpgaEventIdsNeedingSlug(allLpgaEventIds: readonly string[]): string[] {
+  return allLpgaEventIds.filter((id) => !LPGA_EVENT_SLUGS[id]);
+}
+
 function slugFromPrefixedId(id: string, prefix: string): string | undefined {
   if (!id.startsWith(prefix)) return undefined;
   const slug = id.slice(prefix.length).trim();
   return slug || undefined;
+}
+
+/** PGA Tour leaderboard/results URL based on event phase (live, upcoming, or completed). */
+export function buildPgaTourLeaderboardUrl(
+  event: Pick<TourSeasonEvent, 'startDate' | 'endDate' | 'slug' | 'tournId'>,
+  today: Date = new Date(),
+): string | null {
+  const slug = event.slug?.trim();
+  const tournId = event.tournId?.trim();
+  if (!slug || !tournId) return null;
+
+  if (pgaEventPhase(event, today) === 'completed') {
+    const year = event.startDate.slice(0, 4);
+    return `https://www.pgatour.com/tournaments/${year}/${slug}/R${year}${tournId}/past-results`;
+  }
+
+  return PGA_LIVE_LEADERBOARD_URL;
 }
 
 export function resolveEventLinkFields(event: TourSeasonEvent): Pick<TourSeasonEvent, 'slug' | 'tournId'> {
@@ -106,7 +170,7 @@ export function resolveEventLinkFields(event: TourSeasonEvent): Pick<TourSeasonE
   }
 
   if (event.id.startsWith('lpga-')) {
-    const slug = slugFromPrefixedId(event.id, 'lpga-2026-');
+    const slug = LPGA_EVENT_SLUGS[event.id];
     return slug ? { slug } : {};
   }
 

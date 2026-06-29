@@ -1,3 +1,4 @@
+import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   SafeAreaView,
@@ -12,6 +13,8 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import HomeHeader from './components/HomeHeader';
+import { NewsCardCompact, TrendingList } from './components/FeedNewsCards';
 import {
   Article,
   TOUR_LATEST_HEADER_LIMIT,
@@ -33,7 +36,7 @@ import {
   type UpcomingTourEvent,
   getMergedUpcomingTourEvents,
   resolveEventLeaderboardUrl,
-  upcomingEventCurrentOrNextIndex,
+  upcomingEventScrollTargetIndex,
 } from './lib/upcomingTourEvents';
 
 function timeAgo(iso: string) {
@@ -43,36 +46,6 @@ function timeAgo(iso: string) {
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
   return `${days}d ago`;
-}
-
-// ---------- Reusable card components ----------
-
-function NewsCardCompact({ article, tag }: { article: Article; tag?: string }) {
-  const openArticle = useOpenArticle();
-  return (
-    <TouchableOpacity
-      style={styles.compactCard}
-      activeOpacity={0.8}
-      onPress={() => openArticle(article.url, article.title)}
-    >
-      {tag ? <Text style={styles.scaledTagLabel}>{tag}</Text> : null}
-      <View style={[styles.compactCardRow, { marginTop: tag ? 8 : 0 }]}>
-        <View style={styles.compactCardText}>
-          <Text style={styles.cardTitle} numberOfLines={3}>
-            {article.title}
-          </Text>
-          <Text style={styles.compactCardMeta}>
-            {article.source?.name} · {timeAgo(article.publishedAt)}
-          </Text>
-        </View>
-        {article.urlToImage ? (
-          <Image source={{ uri: article.urlToImage }} style={styles.compactThumb} />
-        ) : (
-          <View style={[styles.compactThumb, { backgroundColor: colors.midNavy }]} />
-        )}
-      </View>
-    </TouchableOpacity>
-  );
 }
 
 function FeaturedNewsCard({ article, tag }: { article: Article; tag?: string }) {
@@ -103,35 +76,6 @@ function FeaturedNewsCard({ article, tag }: { article: Article; tag?: string }) 
         </View>
       </View>
     </TouchableOpacity>
-  );
-}
-
-function TrendingList({ articles }: { articles: Article[] }) {
-  const openArticle = useOpenArticle();
-  const dots = [colors.liveBlue, colors.eagleAmber, colors.birdieGreen, colors.bogeyRed];
-  return (
-    <View style={{ marginBottom: 18 }}>
-      <Text style={styles.scaledTagLabel}>News</Text>
-      <Text style={styles.sectionTitleScaled}>Trending in golf</Text>
-      <View style={styles.trendingBox}>
-        {articles.slice(0, 4).map((a, i) => (
-          <TouchableOpacity
-            key={a.url}
-            activeOpacity={0.7}
-            onPress={() => openArticle(a.url, a.title)}
-            style={[
-              styles.trendingRow,
-              i < articles.length - 1 ? styles.trendingDivider : null,
-            ]}
-          >
-            <View style={[styles.trendingDot, { backgroundColor: dots[i % dots.length] }]} />
-            <Text style={styles.trendingText} numberOfLines={2}>
-              {a.title}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </View>
   );
 }
 
@@ -178,30 +122,6 @@ function FeedBlockItem({ block }: { block: FeedBlock }) {
   }
 }
 
-// ---------- Header ----------
-
-function Header() {
-  return (
-    <View style={styles.header}>
-      <View style={styles.headerLeft}>
-        <View style={styles.homeLogoClip}>
-          <Image
-            source={require('./assets/logo-header-03.png')}
-            style={styles.homeLogo}
-            resizeMode="contain"
-          />
-        </View>
-        <Text style={styles.strapline} numberOfLines={1}>
-          Pro golf · Creator golf · All golf
-        </Text>
-      </View>
-      <View style={styles.profileButton}>
-        <Ionicons name="person-outline" size={16} color={colors.navy} />
-      </View>
-    </View>
-  );
-}
-
 function UpcomingEventsStrip() {
   const openArticle = useOpenArticle();
   const events = useMemo(() => getMergedUpcomingTourEvents(), []);
@@ -216,18 +136,20 @@ function UpcomingEventsStrip() {
     [],
   );
 
-  useEffect(() => {
-    if (events.length === 0) return;
-    const target = upcomingEventCurrentOrNextIndex(events, new Date());
-    const id = requestAnimationFrame(() => {
-      listRef.current?.scrollToIndex({
-        index: target,
-        viewPosition: 0,
-        animated: false,
+  useFocusEffect(
+    useCallback(() => {
+      if (events.length === 0) return;
+      const target = upcomingEventScrollTargetIndex(events, new Date());
+      const id = requestAnimationFrame(() => {
+        listRef.current?.scrollToIndex({
+          index: target,
+          viewPosition: 0,
+          animated: false,
+        });
       });
-    });
-    return () => cancelAnimationFrame(id);
-  }, [events]);
+      return () => cancelAnimationFrame(id);
+    }, [events]),
+  );
 
   const renderEvent: ListRenderItem<UpcomingTourEvent> = useCallback(
     ({ item }) => (
@@ -263,28 +185,6 @@ function UpcomingEventsStrip() {
   );
 }
 
-function FilterPills() {
-  const [active, setActive] = useState('For you');
-  const pills = ['For you', 'Creators', 'Pro news'];
-  return (
-    <FlatList
-      horizontal
-      data={pills}
-      keyExtractor={(p) => p}
-      showsHorizontalScrollIndicator={false}
-      style={styles.pillsRow}
-      renderItem={({ item: p }) => (
-        <TouchableOpacity
-          onPress={() => setActive(p)}
-          style={[styles.pill, active === p ? styles.pillActive : null]}
-        >
-          <Text style={active === p ? styles.pillTextActive : styles.pillText}>{p}</Text>
-        </TouchableOpacity>
-      )}
-    />
-  );
-}
-
 // ---------- Main app ----------
 
 export default function HomeScreen() {
@@ -310,6 +210,7 @@ export default function HomeScreen() {
         setCaughtUp(done);
 
         if (tourLatest.status === 'fulfilled') {
+          sessionRef.current.markVideosShown(tourLatest.value);
           setTourLatestVideos(tourLatest.value);
         } else {
           console.warn('[The Cut] tour-latest-videos failed:', tourLatest.reason);
@@ -368,9 +269,8 @@ export default function HomeScreen() {
           )}
           ListHeaderComponent={
             <>
-              <Header />
+              <HomeHeader />
               <UpcomingEventsStrip />
-              <FilterPills />
               {tourLatestVideos.length > 0 ? (
                 <View style={styles.tourLatestCarouselWrap}>
                   <VideoCarousel
@@ -410,52 +310,8 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.bg },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.border,
-  },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 },
-  homeLogoClip: {
-    width: 56,
-    height: 56,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  homeLogo: {
-    width: 56,
-    height: 56,
-    transform: [{ scale: 1.85 }],
-  },
-  strapline: { color: colors.coolGrey, fontSize: 15, fontWeight: '500', flexShrink: 1 },
-  profileButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: colors.mutedGrey,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   eventsRow: { flexGrow: 0 },
   eventsRowContent: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 6 },
-  pillsRow: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16 },
-  pill: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#B9C3D1',
-    marginRight: 8,
-  },
-  pillActive: { backgroundColor: colors.navy, borderColor: colors.navy },
-  pillText: { fontSize: 13, fontWeight: '500', color: colors.navy },
-  pillTextActive: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
 
   tagLabel: {
     fontSize: 9,
@@ -472,23 +328,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
 
-  compactCard: {
-    backgroundColor: colors.card,
-    borderRadius: 15,
-    borderWidth: 0.5,
-    borderColor: colors.border,
-    padding: 15,
-    marginBottom: 13,
-  },
-  compactCardRow: {
-    flexDirection: 'row',
-    gap: 13,
-    alignItems: 'flex-start',
-  },
-  compactCardText: { flex: 1, minWidth: 0, paddingTop: 1 },
-  compactThumb: { width: 100, height: 100, borderRadius: 10, flexShrink: 0 },
-  cardTitle: { fontSize: 17, fontWeight: '700', color: colors.navy, lineHeight: 23 },
-  compactCardMeta: { fontSize: 13, color: colors.coolGrey, marginTop: 5 },
   cardTitleLarge: { fontSize: 14, fontWeight: '700', color: colors.navy, lineHeight: 19, marginBottom: 4 },
   cardMeta: { fontSize: 11, color: colors.coolGrey, marginTop: 4 },
 
@@ -504,22 +343,8 @@ const styles = StyleSheet.create({
   featuredTitle: { fontSize: 18, fontWeight: '700', color: colors.navy, lineHeight: 24, marginTop: 4 },
 
   sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.navy, marginTop: 6, marginBottom: 2 },
-  sectionTitleScaled: { fontSize: 20, fontWeight: '700', color: colors.navy, marginTop: 8, marginBottom: 3 },
   sectionSubtitle: { fontSize: 12, color: colors.coolGrey, marginBottom: 4 },
   sectionSubtitleScaled: { fontSize: 15, color: colors.coolGrey, marginBottom: 5 },
-
-  trendingBox: {
-    backgroundColor: colors.card,
-    borderRadius: 15,
-    borderWidth: 0.5,
-    borderColor: colors.border,
-    overflow: 'hidden',
-    marginTop: 10,
-  },
-  trendingRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 13, padding: 15 },
-  trendingDivider: { borderBottomWidth: 0.5, borderBottomColor: '#E5E9EE' },
-  trendingDot: { width: 20, height: 20, borderRadius: 5, marginTop: 2 },
-  trendingText: { fontSize: 16, fontWeight: '600', color: colors.navy, flex: 1, lineHeight: 23 },
 
   featuredVideoCard: {
     backgroundColor: colors.card,

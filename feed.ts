@@ -4,11 +4,13 @@ export const API_BASE = 'https://the-cut-production-f9f7.up.railway.app';
 
 export const FEED_PAGE_SIZE = {
   news: 20,
-  topVideos: 10,
   topShorts: 15,
   tourHighlights: 15,
   interviews: 20,
 } as const;
+
+/** tour-latest-videos consumed per feed cycle: slot 6 + slot 13 + slot 15. */
+export const TOUR_LATEST_PER_CYCLE = 1 + FEED_PAGE_SIZE.tourHighlights + 1;
 
 export const SHORTS_CAROUSEL_SIZE = 10;
 
@@ -31,9 +33,8 @@ export type FeedBlock =
 
 type PaginationCursor = {
   news: { page: number; exhausted: boolean; totalResults?: number };
-  topVideos: { offset: number; exhausted: boolean };
   topShorts: { offset: number; exhausted: boolean };
-  tourHighlights: { offset: number; exhausted: boolean };
+  tourLatest: { offset: number; exhausted: boolean };
   interviews: { offset: number; exhausted: boolean };
 };
 
@@ -46,16 +47,9 @@ async function fetchNewsPage(page: number): Promise<{ articles: Article[]; total
   return { articles, totalResults: json.totalResults };
 }
 
-async function fetchTopVideosPage(offset: number): Promise<VideoItem[]> {
-  const res = await fetch(
-    `${API_BASE}/top-videos?limit=${FEED_PAGE_SIZE.topVideos}&offset=${offset}`,
-  );
-  return normalizeVideoList(await res.json());
-}
-
 async function fetchTopShortsPage(offset: number): Promise<VideoItem[]> {
   const res = await fetch(
-    `${API_BASE}/top-shorts?limit=${FEED_PAGE_SIZE.topShorts}&offset=${offset}`,
+    `${API_BASE}/top-shorts?types=tour,media&limit=${FEED_PAGE_SIZE.topShorts}&offset=${offset}`,
   );
   return normalizeVideoList(await res.json());
 }
@@ -68,9 +62,9 @@ async function fetchInterviewVideosPage(offset: number): Promise<VideoItem[]> {
   return normalizeVideoList(await res.json());
 }
 
-async function fetchTourHighlightsPage(offset: number): Promise<VideoItem[]> {
+async function fetchTourLatestPage(offset: number, limit: number): Promise<VideoItem[]> {
   const res = await fetch(
-    `${API_BASE}/tour-latest-videos?limit=${FEED_PAGE_SIZE.tourHighlights}&offset=${offset}`,
+    `${API_BASE}/tour-latest-videos?limit=${limit}&offset=${offset}`,
   );
   if (!res.ok) throw new Error(`tour-latest-videos failed (${res.status})`);
   return normalizeVideoList(await res.json());
@@ -100,21 +94,26 @@ export class FeedSession {
 
   private newsQueue: Article[] = [];
   private bbcQueue: Article[] = [];
-  private topVideosQueue: VideoItem[] = [];
   private topShortsQueue: VideoItem[] = [];
-  private tourHighlightsQueue: VideoItem[] = [];
+  private tourLatestQueue: VideoItem[] = [];
   private interviewsQueue: VideoItem[] = [];
 
   readonly pagination: PaginationCursor = {
     news: { page: 0, exhausted: false },
-    topVideos: { offset: 0, exhausted: false },
     topShorts: { offset: 0, exhausted: false },
-    tourHighlights: { offset: TOUR_LATEST_HEADER_LIMIT, exhausted: false },
+    tourLatest: { offset: TOUR_LATEST_HEADER_LIMIT, exhausted: false },
     interviews: { offset: 0, exhausted: false },
   };
 
   private cycleIndex = 0;
   private caughtUpAppended = false;
+
+  /** Reserve header carousel IDs so feed refills never repeat them. */
+  markVideosShown(videos: readonly VideoItem[]): void {
+    for (const v of videos) {
+      if (v.videoId) this.shownVideos.add(v.videoId);
+    }
+  }
 
   private queuedArticleUrls(): Set<string> {
     return new Set([
@@ -125,9 +124,8 @@ export class FeedSession {
 
   private queuedVideoIds(): Set<string> {
     return new Set([
-      ...this.topVideosQueue.map((v) => v.videoId),
       ...this.topShortsQueue.map((v) => v.videoId),
-      ...this.tourHighlightsQueue.map((v) => v.videoId),
+      ...this.tourLatestQueue.map((v) => v.videoId),
       ...this.interviewsQueue.map((v) => v.videoId),
     ]);
   }
@@ -135,9 +133,8 @@ export class FeedSession {
   async ensureInitialLoad(): Promise<void> {
     await Promise.all([
       this.refillNews(),
-      this.refillTopVideos(),
       this.refillTopShorts(),
-      this.refillTourHighlights(),
+      this.refillTourLatest(),
       this.refillInterviews(),
     ]);
   }
@@ -146,15 +143,13 @@ export class FeedSession {
     const p = this.pagination;
     return (
       p.news.exhausted &&
-      p.topVideos.exhausted &&
       p.topShorts.exhausted &&
-      p.tourHighlights.exhausted &&
+      p.tourLatest.exhausted &&
       p.interviews.exhausted &&
       this.newsQueue.length === 0 &&
       this.bbcQueue.length === 0 &&
-      this.topVideosQueue.length === 0 &&
       this.topShortsQueue.length === 0 &&
-      this.tourHighlightsQueue.length === 0 &&
+      this.tourLatestQueue.length === 0 &&
       this.interviewsQueue.length === 0
     );
   }
@@ -184,23 +179,6 @@ export class FeedSession {
     }
   }
 
-  private async refillTopVideos(): Promise<void> {
-    if (this.pagination.topVideos.exhausted) return;
-    const offset = this.pagination.topVideos.offset;
-    const items = await fetchTopVideosPage(offset);
-    const queued = this.queuedVideoIds();
-    const fresh = dedupeVideos(items, this.shownVideos, queued);
-    if (fresh.length === 0) {
-      this.pagination.topVideos.exhausted = true;
-      return;
-    }
-    this.topVideosQueue.push(...fresh);
-    this.pagination.topVideos.offset += items.length;
-    if (items.length < FEED_PAGE_SIZE.topVideos) {
-      this.pagination.topVideos.exhausted = true;
-    }
-  }
-
   private async refillTopShorts(): Promise<void> {
     if (this.pagination.topShorts.exhausted) return;
     const offset = this.pagination.topShorts.offset;
@@ -218,20 +196,20 @@ export class FeedSession {
     }
   }
 
-  private async refillTourHighlights(): Promise<void> {
-    if (this.pagination.tourHighlights.exhausted) return;
-    const offset = this.pagination.tourHighlights.offset;
-    const items = await fetchTourHighlightsPage(offset);
+  private async refillTourLatest(): Promise<void> {
+    if (this.pagination.tourLatest.exhausted) return;
+    const offset = this.pagination.tourLatest.offset;
+    const items = await fetchTourLatestPage(offset, FEED_PAGE_SIZE.tourHighlights);
     const queued = this.queuedVideoIds();
     const fresh = dedupeVideos(items, this.shownVideos, queued);
     if (fresh.length === 0) {
-      this.pagination.tourHighlights.exhausted = true;
+      this.pagination.tourLatest.exhausted = true;
       return;
     }
-    this.tourHighlightsQueue.push(...fresh);
-    this.pagination.tourHighlights.offset += items.length;
+    this.tourLatestQueue.push(...fresh);
+    this.pagination.tourLatest.offset += items.length;
     if (items.length < FEED_PAGE_SIZE.tourHighlights) {
-      this.pagination.tourHighlights.exhausted = true;
+      this.pagination.tourLatest.exhausted = true;
     }
   }
 
@@ -254,26 +232,19 @@ export class FeedSession {
 
   private async topUpPools(): Promise<void> {
     const minNews = 18;
-    const minVideos = 2;
     const minShorts = 11;
-    const minTourHighlights = 10;
+    const minTourLatest = TOUR_LATEST_PER_CYCLE;
     const minInterviews = 8;
 
     const tasks: Promise<void>[] = [];
     if (this.newsQueue.length + this.bbcQueue.length < minNews && !this.pagination.news.exhausted) {
       tasks.push(this.refillNews());
     }
-    if (this.topVideosQueue.length < minVideos && !this.pagination.topVideos.exhausted) {
-      tasks.push(this.refillTopVideos());
-    }
     if (this.topShortsQueue.length < minShorts && !this.pagination.topShorts.exhausted) {
       tasks.push(this.refillTopShorts());
     }
-    if (
-      this.tourHighlightsQueue.length < minTourHighlights &&
-      !this.pagination.tourHighlights.exhausted
-    ) {
-      tasks.push(this.refillTourHighlights());
+    if (this.tourLatestQueue.length < minTourLatest && !this.pagination.tourLatest.exhausted) {
+      tasks.push(this.refillTourLatest());
     }
     if (this.interviewsQueue.length < minInterviews && !this.pagination.interviews.exhausted) {
       tasks.push(this.refillInterviews());
@@ -327,9 +298,9 @@ export class FeedSession {
     };
   }
 
-  private takeFeaturedVideo(tag: string): FeedBlock | null {
-    if (this.topVideosQueue.length === 0) return null;
-    const video = this.topVideosQueue.shift()!;
+  private takeTourLatestFeatured(tag: string): FeedBlock | null {
+    if (this.tourLatestQueue.length === 0) return null;
+    const video = this.tourLatestQueue.shift()!;
     this.shownVideos.add(video.videoId);
     return {
       id: `c${this.cycleIndex}-featured-video-${video.videoId}-${tag}`,
@@ -370,8 +341,8 @@ export class FeedSession {
 
   private takeTourHighlightsCarousel(): FeedBlock | null {
     const videos: VideoItem[] = [];
-    while (videos.length < FEED_PAGE_SIZE.tourHighlights && this.tourHighlightsQueue.length > 0) {
-      const v = this.tourHighlightsQueue.shift()!;
+    while (videos.length < FEED_PAGE_SIZE.tourHighlights && this.tourLatestQueue.length > 0) {
+      const v = this.tourLatestQueue.shift()!;
       this.shownVideos.add(v.videoId);
       videos.push(v);
     }
@@ -386,7 +357,7 @@ export class FeedSession {
     };
   }
 
-  private takeCreatorInterviewsCarousel(): FeedBlock | null {
+  private takeTourMediaInterviewsCarousel(): FeedBlock | null {
     if (this.interviewsQueue.length === 0) return null;
 
     const batch = this.interviewsQueue.splice(
@@ -397,10 +368,10 @@ export class FeedSession {
     if (batch.length === 0) return null;
 
     return {
-      id: `c${this.cycleIndex}-creator-interviews-${batch[0].videoId}`,
+      id: `c${this.cycleIndex}-tour-interviews-${batch[0].videoId}`,
       type: 'video-carousel',
       videos: batch,
-      tag: 'Creator',
+      tag: 'Tour / media',
       title: 'Interviews',
       subtitle: 'Press conferences and player interviews',
     };
@@ -453,7 +424,7 @@ export class FeedSession {
     pushCompact();
 
     // Slots 6–8: tour / media video block
-    const tourFeatured = this.takeFeaturedVideo('Tour / media');
+    const tourFeatured = this.takeTourLatestFeatured('Tour / media');
     if (tourFeatured) blocks.push(tourFeatured);
 
     const shortsBlock = this.takeShortsCarousel('Tour / media', 'Shorts');
@@ -480,16 +451,16 @@ export class FeedSession {
     pushCompact();
     pushCompact();
 
-    // Slots 13–14: tour highlights + creator interviews
+    // Slots 13–14: tour highlights + interviews
     const tourHighlights = this.takeTourHighlightsCarousel();
     if (tourHighlights) blocks.push(tourHighlights);
 
-    const creatorInterviews = this.takeCreatorInterviewsCarousel();
-    if (creatorInterviews) blocks.push(creatorInterviews);
+    const tourInterviews = this.takeTourMediaInterviewsCarousel();
+    if (tourInterviews) blocks.push(tourInterviews);
 
-    // Slot 15: creator featured video
-    const creatorFeatured = this.takeFeaturedVideo('Creator');
-    if (creatorFeatured) blocks.push(creatorFeatured);
+    // Slot 15: tour / media featured video
+    const tourFeatured2 = this.takeTourLatestFeatured('Tour / media');
+    if (tourFeatured2) blocks.push(tourFeatured2);
 
     // Slots 16–17
     pushCompact();

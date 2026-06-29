@@ -1,3 +1,4 @@
+import { buildPgaTourLeaderboardUrl } from './tourEventLinks';
 import {
   getMajorChampionships,
   getTourScheduleForTitle,
@@ -103,6 +104,16 @@ export function upcomingEventCurrentOrNextIndex(
   return i === -1 ? Math.max(0, events.length - 1) : i;
 }
 
+/** Strip scroll target: first live event, or next upcoming if none are live. */
+export function upcomingEventScrollTargetIndex(
+  events: readonly { startDate: string; endDate: string }[],
+  today: Date = new Date(),
+): number {
+  const liveIndex = events.findIndex((event) => isEventLive(event, today));
+  if (liveIndex !== -1) return liveIndex;
+  return upcomingEventCurrentOrNextIndex(events, today);
+}
+
 function eventYear(event: Pick<TourSeasonEvent, 'startDate'>): string {
   return event.startDate.slice(0, 4);
 }
@@ -131,7 +142,7 @@ function sharedMajorToUpcomingEvent(major: MajorChampionship): UpcomingTourEvent
 
 /** Per-event leaderboard/results URL, or null when slug data is incomplete. */
 export function buildEventLeaderboardUrl(
-  event: Pick<TourSeasonEvent, 'id' | 'startDate' | 'slug' | 'tournId'>,
+  event: Pick<TourSeasonEvent, 'id' | 'startDate' | 'endDate' | 'slug' | 'tournId'>,
   tourId: UpcomingTourId,
 ): string | null {
   const slug = event.slug?.trim();
@@ -140,17 +151,14 @@ export function buildEventLeaderboardUrl(
   const year = eventYear(event);
 
   switch (tourId) {
-    case 'pga': {
-      const tournId = event.tournId?.trim();
-      if (!tournId) return null;
-      return `https://www.pgatour.com/tournaments/${year}/${slug}/R${year}${tournId}/past-results`;
-    }
+    case 'pga':
+      return buildPgaTourLeaderboardUrl(event);
     case 'dp':
       return `https://www.europeantour.com/dpworld-tour/${slug}/leaderboard`;
     case 'liv':
       return `https://www.livgolf.com/leaderboard/${year}/${slug}`;
     case 'lpga':
-      return `https://www.lpga.com/tournaments/${slug}/results`;
+      return `https://www.lpga.com/tournaments/${slug}/leaderboard`;
     default:
       return null;
   }
