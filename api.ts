@@ -353,6 +353,94 @@ export async function fetchTopVideos(limit = 20, offset = 0): Promise<VideoItem[
   return items.slice(0, limit);
 }
 
+export type HotRightNowVideo = {
+  videoId: string;
+  title: string;
+  summary: string;
+  publishedAt: string;
+  thumbnailUrl: string;
+  watchUrl: string;
+  viewCount: number;
+  velocityPerHour: number | null;
+  creator: {
+    id: string;
+    name: string;
+    handle: string;
+    avatarUrl: string | null;
+  };
+};
+
+type HotRightNowApiRow = {
+  videoId?: string;
+  title?: string;
+  summary?: string;
+  publishedAt?: string;
+  thumbnailUrl?: string;
+  watchUrl?: string;
+  viewCount?: number;
+  velocityPerHour?: number | null;
+  creator?: {
+    id?: string;
+    name?: string;
+    handle?: string;
+    avatarUrl?: string | null;
+  };
+};
+
+function normalizeHotRightNowVideo(raw: HotRightNowApiRow): HotRightNowVideo | null {
+  const videoId = raw.videoId?.trim();
+  if (!videoId) return null;
+
+  const creator = raw.creator;
+  if (!creator?.id || !creator?.name) return null;
+
+  return {
+    videoId,
+    title: raw.title ?? '',
+    summary: raw.summary ?? '',
+    publishedAt: raw.publishedAt ?? '',
+    thumbnailUrl:
+      raw.thumbnailUrl?.trim() ||
+      `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+    watchUrl: raw.watchUrl?.trim() || `https://www.youtube.com/watch?v=${videoId}`,
+    viewCount: raw.viewCount ?? 0,
+    velocityPerHour:
+      raw.velocityPerHour == null || !Number.isFinite(raw.velocityPerHour)
+        ? null
+        : raw.velocityPerHour,
+    creator: {
+      id: creator.id,
+      name: creator.name,
+      handle: creator.handle ?? '',
+      avatarUrl: creator.avatarUrl ?? null,
+    },
+  };
+}
+
+export async function fetchHotRightNow(): Promise<HotRightNowVideo[]> {
+  const res = await fetch(`${API_BASE}/hot-right-now`);
+  if (!res.ok) throw new Error(`hot-right-now failed (${res.status})`);
+  const json = await res.json();
+  const list = Array.isArray(json) ? json : [];
+  return list
+    .map((row) => normalizeHotRightNowVideo(row as HotRightNowApiRow))
+    .filter((row): row is HotRightNowVideo => row != null)
+    .slice(0, 3);
+}
+
+export function formatVelocityPerHour(velocity: number): string {
+  if (velocity >= 1000) {
+    return `+${(velocity / 1000).toFixed(1)}k views/hr`;
+  }
+  return `+${Math.round(velocity)} views/hr`;
+}
+
+export function formatHotRightNowViewCount(count: number): string {
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M views`;
+  if (count >= 1000) return `${(count / 1000).toFixed(1)}K views`;
+  return `${count} views`;
+}
+
 /** Creator-page featured carousel — latest upload per podcast creator. */
 export const CREATOR_FEATURED_CAROUSEL_LIMIT = 8;
 
