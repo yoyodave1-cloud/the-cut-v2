@@ -14,11 +14,13 @@ import {
   type HotRightNowVideo,
 } from '../../api';
 import { useOpenArticle } from '../../ArticleReader';
+import CreatorAvatar from '../CreatorAvatar';
 import { colors } from '../../constants/colors';
 
 const ACCENT = '#FF6B35';
 const ROW_DIVIDER = '#E5E9EE';
 const COLLAPSED_ROW_COUNT = 3;
+const ROW_GAP = 34;
 
 function formatMetaStat(video: HotRightNowVideo): string {
   if (video.velocityPerHour != null && Number.isFinite(video.velocityPerHour)) {
@@ -82,7 +84,7 @@ export default function HotRightNowCard() {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.titleRow}>
-            <Ionicons name="flame" size={18} color={ACCENT} style={styles.flameIcon} />
+            <Ionicons name="flame" size={20} color={ACCENT} style={styles.flameIcon} />
             <Text style={styles.title}>Hot Right Now</Text>
           </View>
           <Text style={styles.subtitle}>Trending across creator golf</Text>
@@ -92,47 +94,55 @@ export default function HotRightNowCard() {
         </View>
       </View>
 
-      {loading ? (
-        <SkeletonRows />
-      ) : (
-        visibleVideos.map((video, index) => (
-          <TouchableOpacity
-            key={video.videoId}
-            style={[
-              styles.row,
-              index < visibleVideos.length - 1 ? styles.rowDivider : null,
-            ]}
-            onPress={() => openVideo(video.watchUrl, video.title)}
-            activeOpacity={0.8}
-          >
-            <View style={styles.rowContent}>
-              <View style={styles.titleBlock}>
-                <Text style={styles.rank}>{index + 1}</Text>
-                <Text style={styles.videoTitle} numberOfLines={2}>
-                  {video.title}
-                </Text>
-              </View>
-              <Text style={styles.videoSummary} numberOfLines={2}>
-                {video.summary}
-              </Text>
-              <View style={styles.metaRow}>
-                <View style={styles.metaLeading}>
-                  <Text style={styles.creatorName} numberOfLines={1}>
-                    {video.creator.name}
+      <View style={styles.rowsSection}>
+        {loading ? (
+          <SkeletonRows />
+        ) : (
+          visibleVideos.map((video, index) => (
+            <TouchableOpacity
+              key={video.videoId}
+              style={[
+                styles.row,
+                index < visibleVideos.length - 1 ? styles.rowDivider : null,
+              ]}
+              onPress={() => openVideo(video.watchUrl, video.title)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.rowContent}>
+                <View style={styles.titleBlock}>
+                  <Text style={styles.rank}>{index + 1}</Text>
+                  <Text style={styles.videoTitle} numberOfLines={2}>
+                    {video.title}
                   </Text>
-                  <Text style={styles.metaDot}> · </Text>
                 </View>
-                <Text style={styles.metaStat}>{formatMetaStat(video)}</Text>
+                <Text style={styles.videoSummary} numberOfLines={2}>
+                  {video.summary}
+                </Text>
+                <View style={styles.metaRow}>
+                  <View style={styles.metaLeading}>
+                    <CreatorAvatar
+                      name={video.creator.name}
+                      avatarUrl={video.creator.avatarUrl}
+                      size={28}
+                      style={styles.metaAvatar}
+                    />
+                    <Text style={styles.creatorName} numberOfLines={1}>
+                      {video.creator.name}
+                    </Text>
+                    <Text style={styles.metaDot}> · </Text>
+                  </View>
+                  <Text style={styles.metaStat}>{formatMetaStat(video)}</Text>
+                </View>
               </View>
-            </View>
-            <Image
-              source={{ uri: video.thumbnailUrl }}
-              style={styles.thumbnail}
-              resizeMode="cover"
-            />
-          </TouchableOpacity>
-        ))
-      )}
+              <Image
+                source={{ uri: video.thumbnailUrl }}
+                style={styles.thumbnail}
+                resizeMode="cover"
+              />
+            </TouchableOpacity>
+          ))
+        )}
+      </View>
 
       <View style={styles.footer}>
         <Text style={styles.footerLeft}>Updated every 6 hours</Text>
@@ -174,7 +184,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 15,
     paddingTop: 12,
-    paddingBottom: 10,
+    paddingBottom: 0,
+  },
+  rowsSection: {
+    marginTop: ROW_GAP,
   },
   headerLeft: {
     flex: 1,
@@ -187,14 +200,14 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   title: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 17,
+    fontSize: 20,
+    fontWeight: '700',
     color: colors.navy,
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: 15,
     color: colors.coolGrey,
-    marginTop: 2,
+    marginTop: 3,
   },
   badge: {
     backgroundColor: 'rgba(255,107,53,0.2)',
@@ -213,10 +226,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     paddingHorizontal: 15,
     paddingVertical: 14,
-    marginBottom: 17,
+    marginBottom: ROW_GAP,
   },
   rowDivider: {
-    borderBottomWidth: 0.5,
+    borderBottomWidth: 2,
     borderBottomColor: ROW_DIVIDER,
   },
   rowContent: {
@@ -260,6 +273,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
     minWidth: 0,
+  },
+  metaAvatar: {
+    marginRight: 8,
+    flexShrink: 0,
   },
   creatorName: {
     fontFamily: 'Inter_600SemiBold',
