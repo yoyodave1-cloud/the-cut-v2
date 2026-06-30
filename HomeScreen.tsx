@@ -14,7 +14,6 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import HomeHeader from './components/HomeHeader';
-import HotRightNowCard from './components/cards/HotRightNowCard';
 import { NewsCardCompact, TrendingList } from './components/FeedNewsCards';
 import {
   Article,
@@ -282,7 +281,6 @@ export default function HomeScreen() {
                   />
                 </View>
               ) : null}
-              <HotRightNowCard />
               {error ? (
                 <Text style={[styles.feedError, { paddingHorizontal: 16 }]}>
                   Couldn't reach the backend: {error}

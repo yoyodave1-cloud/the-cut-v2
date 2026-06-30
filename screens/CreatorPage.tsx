@@ -20,6 +20,7 @@ import {
 } from '../api';
 import { THE_FEED_CARD_TAG } from '../lib/theFeedColumn';
 import { normalizeNewsTitleKey } from '../lib/creatorNewsFilter';
+import HotRightNowCard from '../components/cards/HotRightNowCard';
 import { NewsCardCompact, TrendingList } from '../components/FeedNewsCards';
 import HomeHeader from '../components/HomeHeader';
 import ShortGameMasterclass from '../components/ShortGameMasterclass';
@@ -119,6 +120,8 @@ export default function CreatorPage() {
                   subtitle="Latest from top golf podcasts"
                 />
               ) : null}
+
+              <HotRightNowCard />
 
               {SHOW_COMPACT_NEWS_CARDS
                 ? compactNews.map((article, index) => (

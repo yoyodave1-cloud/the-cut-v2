@@ -14,8 +14,11 @@ import {
   type HotRightNowVideo,
 } from '../../api';
 import { useOpenArticle } from '../../ArticleReader';
+import { colors } from '../../constants/colors';
 
 const ACCENT = '#FF6B35';
+const ROW_DIVIDER = '#E5E9EE';
+const COLLAPSED_ROW_COUNT = 3;
 
 function formatMetaStat(video: HotRightNowVideo): string {
   if (video.velocityPerHour != null && Number.isFinite(video.velocityPerHour)) {
@@ -48,6 +51,7 @@ export default function HotRightNowCard() {
   const openVideo = useOpenArticle();
   const [videos, setVideos] = useState<HotRightNowVideo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,6 +73,9 @@ export default function HotRightNowCard() {
 
   if (!loading && videos.length === 0) return null;
 
+  const canExpand = videos.length > COLLAPSED_ROW_COUNT;
+  const visibleVideos = expanded ? videos : videos.slice(0, COLLAPSED_ROW_COUNT);
+
   return (
     <View style={styles.card}>
       <View style={styles.accentBar} />
@@ -81,17 +88,20 @@ export default function HotRightNowCard() {
           <Text style={styles.subtitle}>Trending across creator golf</Text>
         </View>
         <View style={styles.badge}>
-          <Text style={styles.badgeText}>TOP 3</Text>
+          <Text style={styles.badgeText}>TOP 10</Text>
         </View>
       </View>
 
       {loading ? (
         <SkeletonRows />
       ) : (
-        videos.map((video, index) => (
+        visibleVideos.map((video, index) => (
           <TouchableOpacity
             key={video.videoId}
-            style={[styles.row, index < videos.length - 1 ? styles.rowDivider : null]}
+            style={[
+              styles.row,
+              index < visibleVideos.length - 1 ? styles.rowDivider : null,
+            ]}
             onPress={() => openVideo(video.watchUrl, video.title)}
             activeOpacity={0.8}
           >
@@ -126,8 +136,19 @@ export default function HotRightNowCard() {
 
       <View style={styles.footer}>
         <Text style={styles.footerLeft}>Updated every 6 hours</Text>
-        <TouchableOpacity activeOpacity={0.7}>
-          <Text style={styles.footerRight}>All trending ›</Text>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => {
+            if (expanded) {
+              setExpanded(false);
+            } else if (canExpand) {
+              setExpanded(true);
+            }
+          }}
+        >
+          <Text style={styles.footerRight}>
+            {expanded ? 'Show less' : 'All trending ›'}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -136,11 +157,11 @@ export default function HotRightNowCard() {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#1A2E4A',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#3B5068',
-    marginBottom: 12,
+    backgroundColor: colors.card,
+    borderRadius: 15,
+    borderWidth: 0.5,
+    borderColor: colors.border,
+    marginBottom: 13,
     overflow: 'hidden',
   },
   accentBar: {
@@ -151,7 +172,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 15,
     paddingTop: 12,
     paddingBottom: 10,
   },
@@ -168,11 +189,11 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: 'Inter_700Bold',
     fontSize: 17,
-    color: '#FFFFFF',
+    color: colors.navy,
   },
   subtitle: {
     fontSize: 12,
-    color: '#8A9BB0',
+    color: colors.coolGrey,
     marginTop: 2,
   },
   badge: {
@@ -190,18 +211,17 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    padding: 12,
-    marginBottom: 10,
+    paddingHorizontal: 15,
+    paddingVertical: 14,
+    marginBottom: 17,
   },
   rowDivider: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#3B5068',
-    marginBottom: 0,
-    paddingBottom: 12,
+    borderBottomWidth: 0.5,
+    borderBottomColor: ROW_DIVIDER,
   },
   rowContent: {
     flex: 1,
-    marginRight: 12,
+    marginRight: 14,
     minWidth: 0,
   },
   titleBlock: {
@@ -213,26 +233,26 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     fontSize: 14,
     color: ACCENT,
-    lineHeight: 24,
+    lineHeight: 23,
     minWidth: 14,
   },
   videoTitle: {
     flex: 1,
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 18,
-    color: '#FFFFFF',
-    lineHeight: 24,
+    fontSize: 17,
+    color: colors.navy,
+    lineHeight: 23,
   },
   videoSummary: {
-    fontSize: 16,
-    color: '#8A9BB0',
-    marginTop: 6,
-    lineHeight: 22,
+    fontSize: 15,
+    color: colors.coolGrey,
+    marginTop: 8,
+    lineHeight: 21,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 10,
     gap: 4,
   },
   metaLeading: {
@@ -244,36 +264,36 @@ const styles = StyleSheet.create({
   creatorName: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 13,
-    color: '#4A90D9',
+    color: colors.liveBlue,
     flexShrink: 1,
   },
   metaDot: {
-    color: '#566778',
+    color: colors.coolGrey,
     fontSize: 13,
   },
   metaStat: {
     fontSize: 13,
-    color: '#566778',
+    color: colors.coolGrey,
     flexShrink: 0,
   },
   thumbnail: {
-    width: 112,
-    height: 112,
-    borderRadius: 8,
-    backgroundColor: '#243D5C',
+    width: 88,
+    height: 88,
+    borderRadius: 6,
+    backgroundColor: colors.midNavy,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 15,
     paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#3B5068',
+    borderTopWidth: 0.5,
+    borderTopColor: ROW_DIVIDER,
   },
   footerLeft: {
     fontSize: 11,
-    color: '#566778',
+    color: colors.coolGrey,
   },
   footerRight: {
     fontFamily: 'Inter_600SemiBold',
@@ -281,27 +301,27 @@ const styles = StyleSheet.create({
     color: ACCENT,
   },
   skeletonThumb: {
-    width: 112,
-    height: 112,
-    borderRadius: 8,
-    backgroundColor: '#243D5C',
+    width: 88,
+    height: 88,
+    borderRadius: 6,
+    backgroundColor: colors.border,
   },
   skeletonLineWide: {
     height: 14,
-    backgroundColor: '#243D5C',
+    backgroundColor: colors.border,
     borderRadius: 4,
     width: '92%',
   },
   skeletonLineMedium: {
     height: 14,
-    backgroundColor: '#243D5C',
+    backgroundColor: colors.border,
     borderRadius: 4,
     marginTop: 8,
     width: '78%',
   },
   skeletonLineNarrow: {
     height: 12,
-    backgroundColor: '#243D5C',
+    backgroundColor: colors.border,
     borderRadius: 4,
     marginTop: 10,
     width: '55%',

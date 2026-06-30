@@ -425,7 +425,7 @@ export async function fetchHotRightNow(): Promise<HotRightNowVideo[]> {
   return list
     .map((row) => normalizeHotRightNowVideo(row as HotRightNowApiRow))
     .filter((row): row is HotRightNowVideo => row != null)
-    .slice(0, 3);
+    .slice(0, 10);
 }
 
 export function formatVelocityPerHour(velocity: number): string {
