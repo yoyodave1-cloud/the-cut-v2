@@ -1,5 +1,4 @@
-import { useFocusEffect } from '@react-navigation/native';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   SafeAreaView,
   FlatList,
@@ -9,7 +8,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  type ListRenderItem,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,17 +25,10 @@ import {
   ShortsCarousel,
   VideoCarousel,
 } from './components/VideoFeedCards';
-import UpcomingEventTile from './components/UpcomingEventTile';
+import UpcomingEventsStrip from './components/UpcomingEventsStrip';
 import { ArticleReaderProvider, useOpenArticle } from './ArticleReader';
 import { FeedBlock, FeedSession } from './feed';
 import { colors } from './constants/colors';
-import {
-  EVENT_TILE_STRIDE,
-  type UpcomingTourEvent,
-  getMergedUpcomingTourEvents,
-  resolveEventLeaderboardUrl,
-  upcomingEventScrollTargetIndex,
-} from './lib/upcomingTourEvents';
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -120,69 +111,6 @@ function FeedBlockItem({ block }: { block: FeedBlock }) {
     default:
       return null;
   }
-}
-
-function UpcomingEventsStrip() {
-  const openArticle = useOpenArticle();
-  const events = useMemo(() => getMergedUpcomingTourEvents(), []);
-  const listRef = useRef<FlatList<UpcomingTourEvent>>(null);
-
-  const getItemLayout = useCallback(
-    (_: ArrayLike<UpcomingTourEvent> | null | undefined, index: number) => ({
-      length: EVENT_TILE_STRIDE,
-      offset: EVENT_TILE_STRIDE * index,
-      index,
-    }),
-    [],
-  );
-
-  useFocusEffect(
-    useCallback(() => {
-      if (events.length === 0) return;
-      const target = upcomingEventScrollTargetIndex(events, new Date());
-      const id = requestAnimationFrame(() => {
-        listRef.current?.scrollToIndex({
-          index: target,
-          viewPosition: 0,
-          animated: false,
-        });
-      });
-      return () => cancelAnimationFrame(id);
-    }, [events]),
-  );
-
-  const renderEvent: ListRenderItem<UpcomingTourEvent> = useCallback(
-    ({ item }) => (
-      <UpcomingEventTile
-        item={item}
-        onPress={() => openArticle(resolveEventLeaderboardUrl(item), item.fullName)}
-      />
-    ),
-    [openArticle],
-  );
-
-  if (events.length === 0) return null;
-
-  return (
-    <FlatList
-      ref={listRef}
-      horizontal
-      data={events}
-      keyExtractor={(item) => item.id}
-      renderItem={renderEvent}
-      showsHorizontalScrollIndicator={false}
-      removeClippedSubviews
-      style={styles.eventsRow}
-      contentContainerStyle={styles.eventsRowContent}
-      getItemLayout={getItemLayout}
-      onScrollToIndexFailed={(info) => {
-        listRef.current?.scrollToOffset({
-          offset: info.averageItemLength * info.index,
-          animated: false,
-        });
-      }}
-    />
-  );
 }
 
 // ---------- Main app ----------
@@ -310,8 +238,6 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.bg },
-  eventsRow: { flexGrow: 0 },
-  eventsRowContent: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 6 },
 
   tagLabel: {
     fontSize: 9,

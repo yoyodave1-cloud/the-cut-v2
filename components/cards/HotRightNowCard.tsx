@@ -110,7 +110,9 @@ export default function HotRightNowCard() {
             >
               <View style={styles.rowContent}>
                 <View style={styles.titleBlock}>
-                  <Text style={styles.rank}>{index + 1}</Text>
+                  <View style={styles.rankBadge}>
+                    <Text style={styles.rank}>{index + 1}</Text>
+                  </View>
                   <Text style={styles.videoTitle} numberOfLines={2}>
                     {video.title}
                   </Text>
@@ -225,7 +227,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     paddingHorizontal: 15,
-    paddingVertical: 14,
+    paddingTop: 14,
+    paddingBottom: 14,
     marginBottom: ROW_GAP,
   },
   rowDivider: {
@@ -242,12 +245,18 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 8,
   },
+  rankBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#000000',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   rank: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-    color: ACCENT,
-    lineHeight: 23,
-    minWidth: 14,
+    fontSize: 16,
+    color: '#FFFFFF',
   },
   videoTitle: {
     flex: 1,

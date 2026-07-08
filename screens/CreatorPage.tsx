@@ -21,6 +21,7 @@ import {
 import { THE_FEED_CARD_TAG } from '../lib/theFeedColumn';
 import { normalizeNewsTitleKey } from '../lib/creatorNewsFilter';
 import HotRightNowCard from '../components/cards/HotRightNowCard';
+import DailyAvatarVideo from '../components/DailyAvatarVideo';
 import { NewsCardCompact, TrendingList } from '../components/FeedNewsCards';
 import HomeHeader from '../components/HomeHeader';
 import ShortGameMasterclass from '../components/ShortGameMasterclass';
@@ -108,6 +109,9 @@ export default function CreatorPage() {
             contentContainerStyle={styles.scrollContent}
           >
             <HomeHeader />
+            <View style={styles.dailyVideoWrap}>
+              <DailyAvatarVideo />
+            </View>
 
             <View style={styles.feedSections}>
               {error ? <Text style={styles.feedError}>Couldn't reach the backend: {error}</Text> : null}
@@ -162,6 +166,11 @@ const styles = StyleSheet.create({
   },
   loadingText: { color: colors.coolGrey, fontSize: 14 },
   scrollContent: { paddingBottom: 24 },
+  dailyVideoWrap: {
+    width: '100%',
+    paddingHorizontal: 16,
+    marginBottom: 14,
+  },
   feedSections: { paddingHorizontal: 16 },
   feedError: { color: colors.bogeyRed, marginBottom: 12 },
 });
