@@ -1,3 +1,6 @@
 node_modules/
 .expo/
 *.log
+backend/academy/.env
+backend/academy/.env.*
+!backend/academy/.env.example

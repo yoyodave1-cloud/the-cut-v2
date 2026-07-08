@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import HomeScreen from './HomeScreen';
 import CreatorsStackNavigator from './navigation/CreatorsStackNavigator';
+import AcademyStackNavigator from './navigation/AcademyStackNavigator';
 import { colors } from './constants/colors';
 
 const Tab = createBottomTabNavigator();
@@ -64,6 +65,15 @@ function MainTabs() {
         options={{
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="camera-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Academy"
+        component={AcademyStackNavigator}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="school-outline" size={size} color={color} />
           ),
         }}
       />
