@@ -109,8 +109,13 @@ async function analyzeVideo(videoPath, shotTypeId, angleType) {
   const { estimatePoseFromVideo } = require('./poseEstimation');
   const shotDef = getShotType(shotTypeId);
   const pose = await estimatePoseFromVideo(videoPath);
+  // The rendered/measured skeleton gets 5-frame smoothing for a glitch-free
+  // overlay, but phase timing runs on RAW frames: moving-average filtering
+  // drags the top-of-backswing early and the impact crossing late on fast
+  // downswings, systematically skewing tempo. detectPhases handles noise by
+  // curve-fitting (no phase lag) instead of pre-filtering.
   const frames = smoothFrames(pose.frames, 5);
-  const phases = detectPhases(frames, shotDef.swingClass);
+  const phases = detectPhases(pose.frames, shotDef.swingClass);
   const { metrics, perFrameAngles } = computeMetrics(frames, phases, shotDef, angleType);
   const { checkpointResults, faults } = evaluate(shotDef, metrics, angleType);
 

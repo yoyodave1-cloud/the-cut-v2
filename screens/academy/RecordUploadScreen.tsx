@@ -17,6 +17,7 @@ import { colors } from '../../constants/colors';
 import { SHOT_TYPE_STYLE } from '../../constants/academy';
 import { SHOT_TYPE_LIBRARY } from '../../lib/academy/shotTypeLibrary';
 import { uploadSwing } from '../../lib/academy/api';
+import { saveLocalVideo } from '../../lib/academy/localVideo';
 import { getAcademyUserId } from '../../lib/academy/userId';
 import SwingCamera from '../../components/academy/SwingCamera';
 import type { AngleType } from '../../lib/academy/types';
@@ -49,6 +50,9 @@ export default function RecordUploadScreen({ navigation, route }: Props) {
     try {
       const userId = await getAcademyUserId();
       const { uploadId } = await uploadSwing({ uri, mimeType, userId, shotType, angleType });
+      // The server processes the video transiently and deletes it — this
+      // on-device copy is the only durable one, and what "rewatch" plays.
+      await saveLocalVideo(uploadId, uri);
       navigation.replace('SwingAnalysis', { uploadId });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Upload failed';

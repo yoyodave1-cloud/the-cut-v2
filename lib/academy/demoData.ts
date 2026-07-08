@@ -365,7 +365,6 @@ export function makeDemoUploadDetail(shotType: ShotTypeId): UploadDetail {
       shot_type: shotType,
       angle_type: 'face_on',
       status: 'complete',
-      video_url: null,
       created_at: new Date().toISOString(),
     },
     analysis: {

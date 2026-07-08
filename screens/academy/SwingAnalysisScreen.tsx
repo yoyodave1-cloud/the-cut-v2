@@ -17,6 +17,7 @@ import { colors } from '../../constants/colors';
 import { CHECK_STATUS_COLOR, SEVERITY_LABEL, SHOT_TYPE_STYLE } from '../../constants/academy';
 import { SHOT_TYPE_LIBRARY } from '../../lib/academy/shotTypeLibrary';
 import { fetchUploadDetail, pollUploadUntilDone } from '../../lib/academy/api';
+import { getLocalVideoUri } from '../../lib/academy/localVideo';
 import { cacheDetail, getCachedDetail, getDemoDetail } from '../../lib/academy/detailCache';
 import SkeletonOverlay from '../../components/academy/SkeletonOverlay';
 import FrameScrubber from '../../components/academy/FrameScrubber';
@@ -148,7 +149,29 @@ export default function SwingAnalysisScreen({ navigation, route }: Props) {
   }, [uploadId, demoShotType]);
 
   // ---- video + playback sync ----------------------------------------------
-  const videoUrl = detail?.upload.video_url ?? null;
+  // Raw video is never stored server-side; playback uses the on-device copy.
+  // When it's missing (reinstall, new device) the saved analysis still renders
+  // as skeleton-only playback.
+  const [localUri, setLocalUri] = useState<string | null>(null);
+  const [localChecked, setLocalChecked] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    if (!uploadId || demoShotType) {
+      setLocalChecked(true);
+      return undefined;
+    }
+    getLocalVideoUri(uploadId).then((uri) => {
+      if (!cancelled) {
+        setLocalUri(uri);
+        setLocalChecked(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [uploadId, demoShotType]);
+
+  const videoUrl = localUri;
   const player = useVideoPlayer(videoUrl, (p) => {
     p.loop = false;
     p.timeUpdateEventInterval = 0.05;
@@ -319,6 +342,17 @@ export default function SwingAnalysisScreen({ navigation, route }: Props) {
             </View>
           ) : null}
         </View>
+
+        {/* Missing local video notice (analysis still fully usable) */}
+        {!detail.demo && localChecked && !localUri ? (
+          <View style={styles.noticeCard}>
+            <Ionicons name="phone-portrait-outline" size={16} color={colors.coolGrey} />
+            <Text style={styles.noticeText}>
+              The original video only lives on the phone that recorded it, so it can't be shown
+              here — your full analysis is saved and plays as the tracked skeleton instead.
+            </Text>
+          </View>
+        ) : null}
 
         {/* Scrubber */}
         <View style={styles.card}>
@@ -609,6 +643,24 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: 14,
     marginTop: 12,
+  },
+  noticeCard: {
+    width: SCREEN_W - 32,
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'flex-start',
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 12,
+    marginTop: 10,
+  },
+  noticeText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.coolGrey,
   },
   cardTitleRow: {
     flexDirection: 'row',

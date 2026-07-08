@@ -28,7 +28,7 @@ function median(values) {
 }
 
 function buildContext(frames, phases, angleType) {
-  const { indices, targetDir, leadSide } = phases;
+  const { indices, times, targetDir, leadSide } = phases;
   const dt = frames.length > 1 ? frames[1].t - frames[0].t : 1 / 24;
   const torso = median(frames.map((f) => torsoLength(f)));
   const speeds = pointSpeeds(frames, wristPoint);
@@ -37,7 +37,7 @@ function buildContext(frames, phases, angleType) {
   const after = (i, seconds) => clamp(i + Math.round(seconds / dt), 0, frames.length - 1);
   const lead = (b, part) => (leadSide === 'left' ? b[`left${part}`] : b[`right${part}`]);
   const trail = (b, part) => (leadSide === 'left' ? b[`right${part}`] : b[`left${part}`]);
-  return { frames, indices, targetDir, leadSide, angleType, dt, torso, speeds, body, at, after, lead, trail };
+  return { frames, indices, times, targetDir, leadSide, angleType, dt, torso, speeds, body, at, after, lead, trail };
 }
 
 /** Apparent rotation from foreshortening of a landmark pair's x-width (face-on 2D proxy). */
@@ -248,9 +248,19 @@ const METRIC_FNS = {
   },
 
   tempo_ratio(ctx) {
-    const { takeaway, top, impact } = ctx.indices;
-    const back = ctx.frames[top].t - ctx.frames[takeaway].t;
-    const down = ctx.frames[impact].t - ctx.frames[top].t;
+    // Sub-frame phase times when available — integer keyframes quantize a
+    // ~7-frame downswing far too coarsely for a meaningful ratio.
+    const { takeaway, top, impact } = ctx.times ?? {};
+    let back;
+    let down;
+    if (takeaway != null && top != null && impact != null) {
+      back = top - takeaway;
+      down = impact - top;
+    } else {
+      const idx = ctx.indices;
+      back = ctx.frames[idx.top].t - ctx.frames[idx.takeaway].t;
+      down = ctx.frames[idx.impact].t - ctx.frames[idx.top].t;
+    }
     if (back <= 0 || down <= 0) return null;
     return back / down;
   },

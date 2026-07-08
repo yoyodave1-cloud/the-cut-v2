@@ -17,11 +17,12 @@ import { colors } from '../../constants/colors';
 import { SHOT_TYPE_STYLE } from '../../constants/academy';
 import { SHOT_TYPE_LIBRARY } from '../../lib/academy/shotTypeLibrary';
 import { fetchUploadDetail, fetchUploads } from '../../lib/academy/api';
+import { getLocalVideoUri } from '../../lib/academy/localVideo';
 import { cacheDetail, getCachedDetail, getDemoDetail } from '../../lib/academy/detailCache';
 import { makeDemoSequence } from '../../lib/academy/demoData';
 import { getAcademyUserId } from '../../lib/academy/userId';
 import SkeletonOverlay from '../../components/academy/SkeletonOverlay';
-import type { JointAngleData, SwingUpload } from '../../lib/academy/types';
+import type { JointAngleData, SessionSummary } from '../../lib/academy/types';
 import type { AcademyStackParamList } from '../../navigation/academyStackTypes';
 
 type Props = NativeStackScreenProps<AcademyStackParamList, 'CompareSwings'>;
@@ -126,7 +127,7 @@ export default function CompareSwingsScreen({ navigation, route }: Props) {
   const [refJad, setRefJad] = useState<JointAngleData | null>(null);
   const [refVideo, setRefVideo] = useState<string | null>(null);
   const [refChoice, setRefChoice] = useState<'ideal' | string>('ideal');
-  const [history, setHistory] = useState<SwingUpload[]>([]);
+  const [history, setHistory] = useState<SessionSummary[]>([]);
   const [loadingRef, setLoadingRef] = useState(false);
   const [u, setU] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -146,7 +147,7 @@ export default function CompareSwingsScreen({ navigation, route }: Props) {
       if (detail?.analysis) {
         cacheDetail(detail);
         setLeftJad(detail.analysis.joint_angle_data);
-        setLeftVideo(detail.upload.video_url);
+        setLeftVideo(await getLocalVideoUri(uploadId));
       }
     }
     load();
@@ -186,7 +187,7 @@ export default function CompareSwingsScreen({ navigation, route }: Props) {
         if (detail.analysis) {
           cacheDetail(detail);
           setRefJad(detail.analysis.joint_angle_data);
-          setRefVideo(detail.upload.video_url);
+          setRefVideo(await getLocalVideoUri(choice));
         }
       } catch {
         setRefChoice('ideal');

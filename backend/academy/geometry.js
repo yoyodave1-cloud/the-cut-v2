@@ -174,8 +174,13 @@ function smoothFrames(frames, window = 5) {
   });
 }
 
-/** Per-frame speed of a tracked point across the sequence (normalized units / second). */
-function pointSpeeds(frames, getPoint) {
+/**
+ * Per-frame speed of a tracked point (normalized units / second).
+ * smooth=true applies a light 3-point average so single-frame jitter doesn't
+ * create phantom peaks — but note it bleeds motion one frame backward, so
+ * timing-sensitive consumers (takeaway detection) should use smooth=false.
+ */
+function pointSpeeds(frames, getPoint, smooth = true) {
   const speeds = new Array(frames.length).fill(0);
   let prev = null;
   let prevT = null;
@@ -189,7 +194,7 @@ function pointSpeeds(frames, getPoint) {
       prevT = frames[i].t;
     }
   }
-  // Light smoothing so single-frame jitter doesn't create phantom peaks.
+  if (!smooth) return speeds;
   return speeds.map((s, i) => {
     const a = speeds[Math.max(0, i - 1)];
     const b = speeds[Math.min(speeds.length - 1, i + 1)];

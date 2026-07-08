@@ -2,20 +2,12 @@
  * Supabase persistence for Academy — uploads, analysis, recommendations,
  * progress. All access goes through the backend service-role client; the
  * academy_* tables have RLS enabled with no anon policies on purpose.
+ *
+ * Privacy note: raw swing video is NEVER stored server-side. The upload is
+ * processed from a temp file and deleted; the durable record is the pose
+ * landmark data (joint_angle_data). The only copy of the video lives on the
+ * user's device.
  */
-
-const STORAGE_BUCKET = 'academy-videos';
-
-async function uploadVideoToStorage(supabase, userId, uploadId, buffer, mimeType) {
-  const ext = mimeType && mimeType.includes('quicktime') ? 'mov' : 'mp4';
-  const storagePath = `${userId}/${uploadId}.${ext}`;
-  const { error } = await supabase.storage
-    .from(STORAGE_BUCKET)
-    .upload(storagePath, buffer, { contentType: mimeType || 'video/mp4', upsert: true });
-  if (error) throw new Error(`Video storage upload failed: ${error.message}`);
-  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(storagePath);
-  return { storagePath, publicUrl: data.publicUrl };
-}
 
 async function createUpload(supabase, { userId, shotType, angleType }) {
   const { data, error } = await supabase
@@ -123,17 +115,70 @@ async function getUploadWithAnalysis(supabase, uploadId) {
   return { upload, analysis, recommendations };
 }
 
-async function listUploads(supabase, userId, shotType, limit = 20) {
+/** History list with a lightweight per-session analysis summary. */
+async function listUploads(supabase, userId, shotType, limit = 30) {
   let query = supabase
     .from('academy_swing_uploads')
-    .select('id, shot_type, angle_type, status, video_url, created_at')
+    .select(
+      'id, shot_type, angle_type, status, error_message, created_at, academy_swing_analysis(tempo_ratio, identified_faults)',
+    )
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(limit);
   if (shotType) query = query.eq('shot_type', shotType);
   const { data, error } = await query;
   if (error) throw new Error(`Uploads list failed: ${error.message}`);
-  return data || [];
+
+  return (data || []).map((row) => {
+    const analysis = Array.isArray(row.academy_swing_analysis)
+      ? row.academy_swing_analysis[0]
+      : row.academy_swing_analysis;
+    const faults = Array.isArray(analysis?.identified_faults) ? analysis.identified_faults : [];
+    return {
+      id: row.id,
+      shot_type: row.shot_type,
+      angle_type: row.angle_type,
+      status: row.status,
+      error_message: row.error_message ?? null,
+      created_at: row.created_at,
+      summary: analysis
+        ? {
+            tempo_ratio: analysis.tempo_ratio,
+            fault_count: faults.length,
+            top_fault: faults[0]?.name ?? null,
+          }
+        : null,
+    };
+  });
+}
+
+/**
+ * Delete one session. Ownership-checked; FK cascades take the analysis,
+ * recommendations, AND progress rows with it, so the deleted session drops
+ * out of every trend/average immediately.
+ */
+async function deleteUpload(supabase, uploadId, userId) {
+  const { data, error } = await supabase
+    .from('academy_swing_uploads')
+    .delete()
+    .eq('id', uploadId)
+    .eq('user_id', userId)
+    .select('id');
+  if (error) throw new Error(`Delete failed: ${error.message}`);
+  return (data || []).length > 0;
+}
+
+/** GDPR erase-all: every Academy row for a user. Cascades cover children. */
+async function deleteAllUserData(supabase, userId) {
+  const { data, error } = await supabase
+    .from('academy_swing_uploads')
+    .delete()
+    .eq('user_id', userId)
+    .select('id');
+  if (error) throw new Error(`Erase failed: ${error.message}`);
+  // Progress rows with a null upload_id (none in practice) — sweep anyway.
+  await supabase.from('academy_user_progress').delete().eq('user_id', userId);
+  return (data || []).length;
 }
 
 async function getProgressSeries(supabase, userId, limitPerSeries = 120) {
@@ -160,8 +205,6 @@ async function getRecentAnalyses(supabase, userId, limit = 15) {
 }
 
 module.exports = {
-  STORAGE_BUCKET,
-  uploadVideoToStorage,
   createUpload,
   updateUpload,
   saveAnalysis,
@@ -169,6 +212,8 @@ module.exports = {
   saveProgress,
   getUploadWithAnalysis,
   listUploads,
+  deleteUpload,
+  deleteAllUserData,
   getProgressSeries,
   getRecentAnalyses,
 };

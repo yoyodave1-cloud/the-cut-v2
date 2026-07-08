@@ -1,9 +1,12 @@
 /**
  * Smoke test for the analysis engine.
  *
- * 1. Always: runs synthetic landmark sequences (no video, no TF) through
- *    phase detection -> metrics -> checkpoint/fault evaluation for all five
- *    shot types, and fails loudly on missing phases or crashes.
+ * 1. Always: synthetic landmark sequences (no video, no TF) through phase
+ *    detection -> metrics -> checkpoint/fault evaluation for all five shot
+ *    types × tempo/trim variants, with GROUND-TRUTH keyframe assertions —
+ *    the detected address/takeaway/top/impact/finish must land within a few
+ *    frames of where the synthetic swing actually put them, regardless of
+ *    tempo or how the clip is trimmed.
  * 2. With a video path argument: additionally runs the full ffmpeg + MoveNet
  *    pipeline end-to-end:  node smokeTest.js path\to\swing.mp4 driving face_on
  */
@@ -14,7 +17,9 @@ const { computeMetrics } = require('./metrics');
 const { evaluate } = require('./analyze');
 const { SHOT_TYPES } = require('./checkpoints');
 
-const FPS = 24;
+// Synthetic sampling rate — matches production sampling for a typical phone
+// clip (source-fps-capped, 30fps sources are the norm).
+const FPS = 30;
 
 function lerp(a, b, u) {
   return a + (b - a) * u;
@@ -26,7 +31,6 @@ function ease(u) {
 
 /**
  * Parametric face-on golfer. u values (0..1) morph address -> top -> impact -> finish.
- * back/through describe hand travel; turn compresses shoulder/hip widths.
  */
 function golferFrame(t, { handX, handY, turn, hipShift }) {
   const cx = 0.5 + hipShift;
@@ -34,61 +38,60 @@ function golferFrame(t, { handX, handY, turn, hipShift }) {
   const hipW = 0.05 * Math.cos((turn * 0.5 * Math.PI) / 180);
   const k = new Array(17).fill(null);
   const p = (x, y) => [Number(x.toFixed(4)), Number(y.toFixed(4)), 0.9];
-  k[0] = p(cx, 0.28); // nose
+  k[0] = p(cx, 0.28);
   k[1] = p(cx - 0.01, 0.27);
   k[2] = p(cx + 0.01, 0.27);
   k[3] = p(cx - 0.02, 0.28);
   k[4] = p(cx + 0.02, 0.28);
-  k[5] = p(cx - shoulderW, 0.35); // shoulders
+  k[5] = p(cx - shoulderW, 0.35);
   k[6] = p(cx + shoulderW, 0.35);
-  k[7] = p(lerp(cx - 0.09, handX, 0.5), lerp(0.44, handY, 0.5)); // elbows track hands
+  k[7] = p(lerp(cx - 0.09, handX, 0.5), lerp(0.44, handY, 0.5));
   k[8] = p(lerp(cx + 0.09, handX, 0.5), lerp(0.44, handY, 0.5));
-  k[9] = p(handX - 0.005, handY); // wrists
+  k[9] = p(handX - 0.005, handY);
   k[10] = p(handX + 0.005, handY);
-  k[11] = p(cx - hipW, 0.55); // hips
+  k[11] = p(cx - hipW, 0.55);
   k[12] = p(cx + hipW, 0.55);
-  k[13] = p(0.5 - 0.05, 0.72); // knees stay planted
-  k[14] = p(0.5 + 0.05, 0.72);
-  k[15] = p(0.5 - 0.06, 0.9); // ankles
-  k[16] = p(0.5 + 0.06, 0.9);
+  k[13] = p(0.45, 0.72);
+  k[14] = p(0.55, 0.72);
+  k[15] = p(0.44, 0.9);
+  k[16] = p(0.56, 0.9);
   return { t: Number(t.toFixed(3)), k };
 }
 
-/** Build a synthetic swing: still -> backswing -> downswing -> follow -> still. */
-function makeSwing({ backDur, downDur, topX, topY, topTurn, finishX, finishY, finishTurn }) {
+/**
+ * Build a synthetic swing and return frames + ground-truth phase times.
+ */
+function makeSwing(params, { still1 = 0.8, still2 = 0.6, followDur = 0.5 } = {}) {
   const addr = { handX: 0.5, handY: 0.58, turn: 0, hipShift: 0 };
-  const topP = { handX: topX, handY: topY, turn: topTurn, hipShift: 0.01 };
+  const topP = { handX: params.topX, handY: params.topY, turn: params.topTurn, hipShift: 0.01 };
   const impact = { handX: 0.5, handY: 0.58, turn: 5, hipShift: -0.015 };
-  const finish = { handX: finishX, handY: finishY, turn: finishTurn, hipShift: -0.02 };
+  const finish = { handX: params.finishX, handY: params.finishY, turn: params.finishTurn, hipShift: -0.02 };
 
   const frames = [];
-  const still1 = 0.8;
-  const followDur = 0.5;
-  const still2 = 0.6;
-  const total = still1 + backDur + downDur + followDur + still2;
+  const total = still1 + params.backDur + params.downDur + followDur + still2;
   const n = Math.round(total * FPS);
   for (let i = 0; i <= n; i++) {
     const t = i / FPS;
     let s;
     if (t < still1) s = addr;
-    else if (t < still1 + backDur) {
-      const u = ease((t - still1) / backDur);
+    else if (t < still1 + params.backDur) {
+      const u = ease((t - still1) / params.backDur);
       s = {
         handX: lerp(addr.handX, topP.handX, u),
         handY: lerp(addr.handY, topP.handY, u),
         turn: lerp(addr.turn, topP.turn, u),
         hipShift: lerp(addr.hipShift, topP.hipShift, u),
       };
-    } else if (t < still1 + backDur + downDur) {
-      const u = ease((t - still1 - backDur) / downDur);
+    } else if (t < still1 + params.backDur + params.downDur) {
+      const u = ease((t - still1 - params.backDur) / params.downDur);
       s = {
         handX: lerp(topP.handX, impact.handX, u),
         handY: lerp(topP.handY, impact.handY, u),
         turn: lerp(topP.turn, impact.turn, u),
         hipShift: lerp(topP.hipShift, impact.hipShift, u),
       };
-    } else if (t < still1 + backDur + downDur + followDur) {
-      const u = ease((t - still1 - backDur - downDur) / followDur);
+    } else if (t < still1 + params.backDur + params.downDur + followDur) {
+      const u = ease((t - still1 - params.backDur - params.downDur) / followDur);
       s = {
         handX: lerp(impact.handX, finish.handX, u),
         handY: lerp(impact.handY, finish.handY, u),
@@ -98,7 +101,14 @@ function makeSwing({ backDur, downDur, topX, topY, topTurn, finishX, finishY, fi
     } else s = finish;
     frames.push(golferFrame(t, s));
   }
-  return frames;
+
+  const truth = {
+    takeaway: still1,
+    top: still1 + params.backDur,
+    impact: still1 + params.backDur + params.downDur,
+    finish: still1 + params.backDur + params.downDur + followDur,
+  };
+  return { frames, truth };
 }
 
 const SWING_PARAMS = {
@@ -109,31 +119,87 @@ const SWING_PARAMS = {
   putting: { backDur: 0.55, downDur: 0.28, topX: 0.555, topY: 0.575, topTurn: 6, finishX: 0.44, finishY: 0.57, finishTurn: 8 },
 };
 
+/** Tempo/trim variants — outcome: phases must hold across all of them. */
+const VARIANTS = [
+  { name: 'normal', scaleBack: 1, scaleDown: 1, opts: {} },
+  { name: 'fast', scaleBack: 0.6, scaleDown: 0.6, opts: {} },
+  { name: 'slow', scaleBack: 1.7, scaleDown: 1.5, opts: {} },
+  { name: 'trimmed-start', scaleBack: 1, scaleDown: 1, opts: { still1: 0.04 } },
+  { name: 'long-tail', scaleBack: 1, scaleDown: 1, opts: { still2: 2.5 } },
+];
+
+function assertPhase(name, detectedIdx, truthT, tolEarly, tolLate, errors) {
+  const truthIdx = Math.round(truthT * FPS);
+  const delta = detectedIdx - truthIdx;
+  if (delta < -tolEarly || delta > tolLate) {
+    errors.push(`${name}: detected frame ${detectedIdx}, truth ${truthIdx} (Δ${delta}, allowed -${tolEarly}..+${tolLate})`);
+  }
+}
+
 async function runSynthetic() {
   let failures = 0;
+  let cases = 0;
   for (const [shotTypeId, def] of Object.entries(SHOT_TYPES)) {
-    for (const angle of ['face_on', 'down_the_line']) {
+    for (const variant of VARIANTS) {
+      cases++;
+      // "fast" at 0.6x is realistic for full swings but produces a physically
+      // implausible putting/chipping stroke (a real backstroke never dips
+      // below ~0.4s); bound stroke-class scaling at 0.75x.
+      const floorScale = def.swingClass === 'stroke' ? 0.75 : 0;
+      const params = {
+        ...SWING_PARAMS[shotTypeId],
+        backDur: SWING_PARAMS[shotTypeId].backDur * Math.max(variant.scaleBack, floorScale),
+        downDur: SWING_PARAMS[shotTypeId].downDur * Math.max(variant.scaleDown, floorScale),
+      };
+      const label = `${shotTypeId.padEnd(9)} ${variant.name.padEnd(14)}`;
       try {
-        const frames = smoothFrames(makeSwing(SWING_PARAMS[shotTypeId]), 5);
-        const phases = detectPhases(frames, def.swingClass);
+        const { frames: raw, truth } = makeSwing(params, variant.opts);
+        const frames = smoothFrames(raw, 5);
+        // Mirror analyze.js: phase timing on raw frames, metrics on smoothed.
+        const phases = detectPhases(raw, def.swingClass);
         const { address, takeaway, top, impact, finish } = phases.indices;
+
+        const errors = [];
         if (!(address <= takeaway && takeaway < top && top < impact && impact <= finish)) {
-          throw new Error(`phase order wrong: ${JSON.stringify(phases.indices)}`);
+          errors.push(`phase order wrong: ${JSON.stringify(phases.indices)}`);
         }
-        const { metrics } = computeMetrics(frames, phases, def, angle);
-        const { checkpointResults, faults } = evaluate(def, metrics, angle);
-        const measured = Object.entries(metrics).filter(([, v]) => v != null);
-        if (!measured.length) throw new Error('no metrics measured');
-        const checks = checkpointResults.reduce((s, c) => s + c.checks.length, 0);
-        console.log(
-          `OK  ${shotTypeId.padEnd(9)} ${angle.padEnd(13)} phases=${JSON.stringify(phases.indices)} tempo=${metrics.tempo_ratio ?? '—'} metrics=${measured.length} checks=${checks} faults=${faults.map((f) => f.tag).join(',') || 'none'}`,
-        );
+        // Takeaway may trail truth while the eased motion ramps past the
+        // detection threshold — allow up to 25% of the backswing.
+        const takeawayLate = Math.max(3, Math.round(params.backDur * FPS * 0.25));
+        assertPhase('takeaway', takeaway, truth.takeaway, 3, takeawayLate, errors);
+        assertPhase('top', top, truth.top, 2, 2, errors);
+        assertPhase('impact', impact, truth.impact, 3, 2, errors);
+        // Finish detection targets 90% of follow-through extent (eases in),
+        // so it can sit a few frames early.
+        assertPhase('finish', finish, truth.finish, 6, 3, errors);
+
+        // Metrics + evaluation must run clean on every variant.
+        const { metrics } = computeMetrics(frames, phases, def, 'face_on');
+        const { faults } = evaluate(def, metrics, 'face_on');
+        if (!Object.values(metrics).some((v) => v != null)) errors.push('no metrics measured');
+
+        // Tempo (sub-frame interpolated) must land within 15% of ground truth.
+        const detectedTempo = metrics.tempo_ratio;
+        const truthTempo = params.backDur / params.downDur;
+        if (detectedTempo == null || Math.abs(detectedTempo - truthTempo) / truthTempo > 0.15) {
+          errors.push(`tempo ${detectedTempo} vs truth ${truthTempo.toFixed(2)}`);
+        }
+
+        if (errors.length) {
+          failures++;
+          console.error(`FAIL ${label} ${errors.join(' | ')}`);
+        } else {
+          console.log(
+            `OK  ${label} phases=${JSON.stringify(phases.indices)} tempo=${detectedTempo} (truth ${truthTempo.toFixed(2)}) faults=${faults.length}`,
+          );
+        }
       } catch (err) {
         failures++;
-        console.error(`FAIL ${shotTypeId} ${angle}: ${err.message}`);
+        console.error(`FAIL ${label} ${err.message}`);
       }
     }
   }
+  console.log(`\n${cases - failures}/${cases} ground-truth cases passed.`);
   return failures;
 }
 
@@ -156,8 +222,7 @@ async function runVideo(videoPath, shotType, angleType) {
   const [, , videoPath, shotType = 'driving', angleType = 'face_on'] = process.argv;
   if (videoPath) await runVideo(videoPath, shotType, angleType);
   if (failures) {
-    console.error(`\n${failures} synthetic case(s) failed`);
+    console.error(`\n${failures} case(s) failed`);
     process.exit(1);
   }
-  console.log('\nAll synthetic cases passed.');
 })();

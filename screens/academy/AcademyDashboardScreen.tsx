@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
+  Alert,
   Dimensions,
   Image,
   RefreshControl,
@@ -17,8 +18,9 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { colors } from '../../constants/colors';
 import { SHOT_TYPE_STYLE } from '../../constants/academy';
 import { SHOT_TYPE_IDS, SHOT_TYPE_LIBRARY } from '../../lib/academy/shotTypeLibrary';
-import { fetchDashboard } from '../../lib/academy/api';
+import { deleteAllUserDataRemote, fetchDashboard } from '../../lib/academy/api';
 import { makeDemoDashboard } from '../../lib/academy/demoData';
+import { deleteAllLocalVideos } from '../../lib/academy/localVideo';
 import { getAcademyUserId } from '../../lib/academy/userId';
 import { openYouTubeVideo } from '../../api';
 import TrendChart from '../../components/academy/TrendChart';
@@ -111,6 +113,13 @@ export default function AcademyDashboardScreen({ navigation }: Props) {
               <Text style={styles.demoBadgeText}>DEMO DATA</Text>
             </View>
           ) : null}
+          <TouchableOpacity
+            style={styles.historyButton}
+            onPress={() => navigation.navigate('SessionHistory', undefined)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="time-outline" size={22} color={colors.navy} />
+          </TouchableOpacity>
         </View>
 
         {/* CTA */}
@@ -250,6 +259,39 @@ export default function AcademyDashboardScreen({ navigation }: Props) {
           Trends track your measured checkpoints per shot type — a driver tempo and a putting
           stroke are different skills, so they're never mixed.
         </Text>
+
+        <Text style={styles.privacyNote}>
+          Your swing videos never leave this phone permanently — the server analyses each upload,
+          then deletes it. Only the measured skeleton data is kept.
+        </Text>
+        <TouchableOpacity
+          style={styles.eraseLink}
+          onPress={() => {
+            Alert.alert(
+              'Delete all Academy data?',
+              'Every session, analysis, trend, and locally saved video will be permanently removed. This cannot be undone.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete everything',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      const userId = await getAcademyUserId();
+                      await deleteAllUserDataRemote(userId);
+                      await deleteAllLocalVideos();
+                      await load();
+                    } catch (err) {
+                      Alert.alert('Delete failed', err instanceof Error ? err.message : 'Try again.');
+                    }
+                  },
+                },
+              ],
+            );
+          }}
+        >
+          <Text style={styles.eraseLinkText}>Delete all my Academy data</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -441,5 +483,34 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     paddingHorizontal: 12,
+  },
+  historyButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+    marginTop: 4,
+  },
+  privacyNote: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: colors.mutedGrey,
+    textAlign: 'center',
+    marginTop: 18,
+    paddingHorizontal: 16,
+  },
+  eraseLinkText: {
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+    color: colors.bogeyRed,
+  },
+  eraseLink: {
+    alignItems: 'center',
+    paddingVertical: 10,
   },
 });

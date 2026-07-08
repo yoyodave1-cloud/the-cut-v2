@@ -1,17 +1,19 @@
 import type {
   AngleType,
   DashboardData,
+  SessionSummary,
   ShotTypeId,
-  SwingUpload,
   UploadDetail,
 } from './types';
 
 /**
- * Academy API client. Points at the shared Railway backend by default; set
- * an explicit base (e.g. a LAN dev-server URL like http://192.168.1.x:4100)
- * while the academy patch isn't deployed yet.
+ * Academy API client — points at the dedicated Academy service on Railway
+ * (deployed separately from the shared backend so heavy pose analysis can
+ * never affect the main app's API). For local development against
+ * backend/academy/server.js, temporarily switch to your LAN address,
+ * e.g. 'http://192.168.1.230:4100'.
  */
-export const ACADEMY_API_BASE: string = 'http://192.168.1.230:4100';
+export const ACADEMY_API_BASE: string = 'https://academy-production-752f.up.railway.app';
 
 export class AcademyApiError extends Error {
   status: number;
@@ -103,11 +105,30 @@ export async function pollUploadUntilDone(
 export async function fetchUploads(
   userId: string,
   shotType?: ShotTypeId,
-): Promise<SwingUpload[]> {
+): Promise<SessionSummary[]> {
   const params = new URLSearchParams({ userId });
   if (shotType) params.set('shotType', shotType);
-  const json = await getJson<{ uploads: SwingUpload[] }>(`/academy/uploads?${params}`);
+  const json = await getJson<{ uploads: SessionSummary[] }>(`/academy/uploads?${params}`);
   return json.uploads || [];
+}
+
+/** Delete one session server-side (its progress rows cascade with it). */
+export async function deleteUploadRemote(uploadId: string, userId: string): Promise<void> {
+  const res = await fetch(
+    `${ACADEMY_API_BASE}/academy/uploads/${encodeURIComponent(uploadId)}?userId=${encodeURIComponent(userId)}`,
+    { method: 'DELETE' },
+  );
+  if (!res.ok && res.status !== 404) {
+    throw new AcademyApiError(`Delete failed (${res.status})`, res.status);
+  }
+}
+
+/** GDPR erase-all: every Academy row for this user. */
+export async function deleteAllUserDataRemote(userId: string): Promise<void> {
+  const res = await fetch(`${ACADEMY_API_BASE}/academy/users/${encodeURIComponent(userId)}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new AcademyApiError(`Erase failed (${res.status})`, res.status);
 }
 
 export async function fetchDashboard(userId: string): Promise<DashboardData> {

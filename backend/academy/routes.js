@@ -1,16 +1,22 @@
 /**
  * Academy Express routes.
  *
- * Integration (the-cut/backend/server.js):
- *   const { registerAcademyRoutes } = require('./patches/academy');
- *   registerAcademyRoutes(app, supabase);
+ * Privacy/cost model: uploaded video is written to a temp file, analysed,
+ * and deleted — it never reaches durable storage. The pose landmark data is
+ * the permanent record; the user's device keeps the only copy of the video.
+ *
+ * Analyses run through a serial in-process queue: pose estimation is CPU
+ * heavy, and one-at-a-time keeps memory flat and latency predictable on a
+ * small always-on instance (scale horizontally for throughput).
  *
  * Endpoints:
- *   GET  /academy/shot-types          checkpoint library metadata (drives client UI)
- *   POST /academy/uploads             multipart video + userId/shotType/angleType
- *   GET  /academy/uploads/:id         upload status + analysis + recommendations
- *   GET  /academy/uploads             ?userId=&shotType=  history list
- *   GET  /academy/dashboard           ?userId=  trends, focus faults, recent recs
+ *   GET    /academy/shot-types          checkpoint library metadata
+ *   POST   /academy/uploads             multipart video + userId/shotType/angleType
+ *   GET    /academy/uploads/:id         upload status + analysis + recommendations
+ *   GET    /academy/uploads             ?userId=&shotType=  history with summaries
+ *   DELETE /academy/uploads/:id         ?userId=  delete one session (stats drop it)
+ *   DELETE /academy/users/:userId       erase every Academy row for the user
+ *   GET    /academy/dashboard           ?userId=  trends, focus faults, recent recs
  */
 
 const fs = require('fs');
@@ -24,18 +30,42 @@ const { matchRecommendations } = require('./recommendations');
 const { generateCoaching } = require('./coaching');
 const store = require('./store');
 
+// Disk storage, not memory: a burst of parallel 60MB uploads must not sit in
+// RAM. Files land in the OS temp dir and are always cleaned up in processUpload.
 const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 80 * 1024 * 1024 },
+  storage: multer.diskStorage({
+    destination: os.tmpdir(),
+    filename: (_req, _file, cb) => cb(null, `academy-in-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.mp4`),
+  }),
+  limits: { fileSize: 60 * 1024 * 1024 },
 });
 
-/** Background processing after the upload row exists. Never throws. */
-async function processUpload(supabase, uploadRow, buffer) {
-  const uploadId = uploadRow.id;
-  const tmpPath = path.join(os.tmpdir(), `academy-${uploadId}.mp4`);
-  try {
-    await fs.promises.writeFile(tmpPath, buffer);
+// ---------------------------------------------------------------------------
+// Serial analysis queue
+// ---------------------------------------------------------------------------
 
+const MAX_QUEUE = 20;
+let queueTail = Promise.resolve();
+let queueDepth = 0;
+
+function enqueueAnalysis(job) {
+  if (queueDepth >= MAX_QUEUE) {
+    return false;
+  }
+  queueDepth++;
+  queueTail = queueTail
+    .then(job)
+    .catch((err) => console.warn('[academy] queued job crashed:', err.message))
+    .finally(() => {
+      queueDepth--;
+    });
+  return true;
+}
+
+/** Background processing of one upload. Never throws; always removes the temp file. */
+async function processUpload(supabase, uploadRow, tmpPath) {
+  const uploadId = uploadRow.id;
+  try {
     const shotDef = getShotType(uploadRow.shot_type);
     const analysis = await analyzeVideo(tmpPath, uploadRow.shot_type, uploadRow.angle_type);
 
@@ -74,6 +104,7 @@ async function processUpload(supabase, uploadRow, buffer) {
       error_message: err.message,
     });
   } finally {
+    // The raw video must not outlive processing — this is the privacy contract.
     fs.promises.rm(tmpPath, { force: true }).catch(() => {});
   }
 }
@@ -119,12 +150,14 @@ function registerAcademyRoutes(app, supabase) {
   });
 
   app.post('/academy/uploads', upload.single('video'), async (req, res) => {
+    const tmpPath = req.file?.path;
     try {
       const { userId, shotType, angleType } = req.body || {};
-      if (!req.file || !req.file.buffer) {
+      if (!tmpPath) {
         return res.status(400).json({ error: 'No video file received (field name: video).' });
       }
       if (!userId || !SHOT_TYPE_IDS.includes(shotType)) {
+        fs.promises.rm(tmpPath, { force: true }).catch(() => {});
         return res.status(400).json({ error: 'userId and a valid shotType are required.' });
       }
       const angle = angleType === 'down_the_line' ? 'down_the_line' : 'face_on';
@@ -134,24 +167,21 @@ function registerAcademyRoutes(app, supabase) {
         shotType,
         angleType: angle,
       });
-      const { storagePath, publicUrl } = await store.uploadVideoToStorage(
-        supabase,
-        userId,
-        uploadRow.id,
-        req.file.buffer,
-        req.file.mimetype,
-      );
-      await store.updateUpload(supabase, uploadRow.id, {
-        video_url: publicUrl,
-        storage_path: storagePath,
-        status: 'processing',
-      });
+      await store.updateUpload(supabase, uploadRow.id, { status: 'processing' });
 
-      // Fire-and-forget: client polls GET /academy/uploads/:id for completion.
-      processUpload(supabase, { ...uploadRow, video_url: publicUrl }, req.file.buffer);
+      const accepted = enqueueAnalysis(() => processUpload(supabase, uploadRow, tmpPath));
+      if (!accepted) {
+        fs.promises.rm(tmpPath, { force: true }).catch(() => {});
+        await store.updateUpload(supabase, uploadRow.id, {
+          status: 'failed',
+          error_message: 'Analysis queue is full — please try again in a minute.',
+        });
+        return res.status(503).json({ error: 'Analysis queue is full — please try again in a minute.' });
+      }
 
-      res.json({ uploadId: uploadRow.id, status: 'processing', videoUrl: publicUrl });
+      res.json({ uploadId: uploadRow.id, status: 'processing', queueDepth });
     } catch (err) {
+      if (tmpPath) fs.promises.rm(tmpPath, { force: true }).catch(() => {});
       console.warn('[academy] upload failed:', err.message);
       res.status(500).json({ error: err.message });
     }
@@ -175,9 +205,30 @@ function registerAcademyRoutes(app, supabase) {
         supabase,
         String(userId),
         shotType ? String(shotType) : null,
-        Math.min(Number(limit) || 20, 50),
+        Math.min(Number(limit) || 30, 100),
       );
       res.json({ uploads });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete('/academy/uploads/:id', async (req, res) => {
+    try {
+      const userId = String(req.query.userId || '');
+      if (!userId) return res.status(400).json({ error: 'userId is required.' });
+      const deleted = await store.deleteUpload(supabase, req.params.id, userId);
+      if (!deleted) return res.status(404).json({ error: 'Upload not found.' });
+      res.json({ deleted: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete('/academy/users/:userId', async (req, res) => {
+    try {
+      const count = await store.deleteAllUserData(supabase, String(req.params.userId));
+      res.json({ deleted: true, sessions: count });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -193,7 +244,6 @@ function registerAcademyRoutes(app, supabase) {
         store.getRecentAnalyses(supabase, userId),
       ]);
 
-      // Group progress rows into per-shot-type, per-metric series.
       const trends = {};
       for (const row of progress) {
         const byMetric = (trends[row.shot_type] = trends[row.shot_type] || {});
@@ -213,7 +263,6 @@ function registerAcademyRoutes(app, supabase) {
         };
       }
 
-      // Latest recommendations across this user's analyses.
       const { data: recRows } = await supabase
         .from('academy_swing_recommendations')
         .select(

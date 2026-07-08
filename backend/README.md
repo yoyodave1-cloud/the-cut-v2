@@ -4,43 +4,50 @@ Patches in this folder integrate with the shared Railway API (`the-cut/backend/s
 
 ## Academy (swing analysis)
 
-`patches/academy.js` + the `academy/` module folder — upload a swing video, run 2D pose
-estimation (MoveNet via TensorFlow.js; no LLM), evaluate per-shot-type checkpoints/faults,
-generate coaching narration (Claude, structured data only, deterministic fallback without a
-key), and match faults to creator videos.
+The `academy/` folder is a **standalone Railway service** (project `the-cut-academy`,
+service `academy`, entrypoint `academy/server.js`), deployed separately from the shared
+backend so pose analysis can never affect the main app's API.
+
+Production URL: `https://academy-production-752f.up.railway.app` (the app's
+`lib/academy/api.ts` points here). Deploy updates with
+`cd backend/academy && railway up --service academy --detach`.
+
+Pipeline: upload a swing video → 2D pose estimation (MoveNet via TensorFlow.js; no LLM)
+→ per-shot-type checkpoint/fault evaluation → coaching narration (Claude over structured
+data only; deterministic fallback without a key) → creator-video recommendations.
+
+**Privacy/cost model (round 2):** raw video is processed from a temp file and deleted —
+it is *never* stored server-side (no storage bucket, no video columns). The user's device
+keeps the only copy (`lib/academy/localVideo.ts`); the durable record is the pose landmark
+data. Analyses run through a serial in-process queue to keep memory flat on a small
+always-on instance.
 
 Routes:
 
+- `GET /health`
 - `GET /academy/shot-types` — checkpoint library metadata (phases, metrics, faults, recording tips)
-- `POST /academy/uploads` — multipart `video` + `userId`, `shotType` (`driving|iron|bunker|chipping|putting`), `angleType` (`face_on|down_the_line`). Stores the video in the `academy-videos` Supabase bucket, returns `{uploadId, status: "processing"}`, analyses asynchronously.
+- `POST /academy/uploads` — multipart `video` + `userId`, `shotType` (`driving|iron|bunker|chipping|putting`), `angleType` (`face_on|down_the_line`). Returns `{uploadId, status: "processing"}`; analysis is queued, video deleted after processing.
 - `GET /academy/uploads/:id` — status + full analysis + recommendations when complete
-- `GET /academy/uploads?userId=&shotType=` — upload history (Compare view source)
+- `GET /academy/uploads?userId=&shotType=` — session history with per-session summaries
+- `DELETE /academy/uploads/:id?userId=` — delete one session; progress rows cascade so trends drop it immediately
+- `DELETE /academy/users/:userId` — GDPR erase-all for a user
 - `GET /academy/dashboard?userId=` — per-shot-type trends, focus faults, recent recommendations
 
-Integration:
+Env (set on the Railway service): `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`,
+`ANTHROPIC_API_KEY` (optional — coaching falls back to built-in copy),
+`ACADEMY_COACH_MODEL` (prod runs `claude-haiku-4-5-20251001`; prototype default is
+`claude-fable-5`), `ACADEMY_POSE_MODEL` (`movenet` default | `blazepose`).
 
-```js
-const { registerAcademyRoutes } = require('./patches/academy');
-registerAcademyRoutes(app, supabase);
-```
+Migrations: `backend/supabase/migrations/academy.sql` + `academy_round2_local_video.sql`
+(both applied to the live project, 2026-07-08).
 
-Deployment steps:
+Local dev: `cd backend/academy && npm install && node server.js` (reads `.env`; listens
+on :4100 — point `ACADEMY_API_BASE` at your LAN IP). Tests: `node smokeTest.js` runs 25
+ground-truth keyframe/tempo cases (5 shot types × tempo/trim variants, no video needed);
+`node smokeTest.js swing.mp4 driving face_on` runs the full pipeline on a real clip.
 
-1. Copy `backend/academy/` and `backend/patches/academy.js` into `the-cut/backend/`.
-2. Add the dependencies from `backend/academy/package.json` to `the-cut/backend/package.json`
-   (`@tensorflow/tfjs`, `@tensorflow/tfjs-backend-wasm`, `@tensorflow-models/pose-detection`,
-   `ffmpeg-static`, `jpeg-js`, `multer`; `@tensorflow/tfjs-node` optional — used automatically
-   when it installs cleanly, otherwise the pure-JS wasm backend is used).
-3. Run the SQL in `backend/supabase/migrations/academy.sql` (already applied to the live
-   project on 2026-07-08).
-4. Env: `ANTHROPIC_API_KEY` (optional — coaching falls back to the built-in copy without it),
-   `ACADEMY_COACH_MODEL` (default `claude-fable-5`; switch to `claude-haiku-4-5-20251001` for
-   production volume), `ACADEMY_POSE_MODEL` (`movenet` default | `blazepose`).
-
-Local dev without Railway: `cd backend/academy && npm install && node devServer.js`
-(needs `SUPABASE_URL` + `SUPABASE_SERVICE_KEY`; listens on :4100). Smoke test with
-`node smokeTest.js` (synthetic, no video needed) or
-`node smokeTest.js swing.mp4 driving face_on` for the full pipeline.
+`patches/academy.js` remains only for optionally mounting the same routes inside the
+shared `server.js` — not the deployed path.
 
 ## Creators top-100
 

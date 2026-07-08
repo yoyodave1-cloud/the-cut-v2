@@ -2,11 +2,15 @@
   "name": "the-cut-academy-backend",
   "version": "0.1.0",
   "private": true,
-  "description": "Academy pose-estimation + analysis modules for The Cut shared backend. Installed standalone for local dev (devServer.js); in production these deps are added to the-cut/backend/package.json.",
-  "main": "routes.js",
+  "description": "Academy service: swing upload analysis (2D pose estimation, checkpoints, coaching, recommendations). Deployed as its own always-on Railway service, isolated from The Cut's shared backend.",
+  "main": "server.js",
   "scripts": {
-    "dev": "node devServer.js",
+    "start": "node server.js",
+    "dev": "node server.js",
     "smoke": "node smokeTest.js"
+  },
+  "engines": {
+    "node": "22.x"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

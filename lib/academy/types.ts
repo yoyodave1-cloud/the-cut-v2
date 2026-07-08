@@ -135,14 +135,33 @@ export type Recommendation = {
 
 export type UploadStatus = 'uploaded' | 'processing' | 'complete' | 'failed';
 
+/**
+ * Server upload record. Note there is intentionally no video URL: raw video
+ * is never stored server-side. Playback uses the on-device copy keyed by
+ * this id (lib/academy/localVideo.ts).
+ */
 export type SwingUpload = {
   id: string;
   shot_type: ShotTypeId;
   angle_type: AngleType;
   status: UploadStatus;
   error_message?: string | null;
-  video_url: string | null;
   created_at: string;
+};
+
+/** History row: upload + lightweight analysis summary for list rendering. */
+export type SessionSummary = {
+  id: string;
+  shot_type: ShotTypeId;
+  angle_type: AngleType;
+  status: UploadStatus;
+  error_message: string | null;
+  created_at: string;
+  summary: {
+    tempo_ratio: number | null;
+    fault_count: number;
+    top_fault: string | null;
+  } | null;
 };
 
 export type UploadDetail = {

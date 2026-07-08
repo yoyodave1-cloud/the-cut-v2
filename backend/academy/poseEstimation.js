@@ -48,14 +48,16 @@ function run(cmd, args) {
   });
 }
 
-/** Duration in seconds parsed from ffmpeg -i output (avoids an ffprobe dependency). */
-async function probeDuration(videoPath) {
+/** Duration (s) and source frame rate parsed from ffmpeg -i output (avoids an ffprobe dependency). */
+async function probeVideo(videoPath) {
   const stderr = await run(ffmpegPath(), ['-i', videoPath, '-f', 'null', '-t', '0.1', '-']).catch(
     (err) => err.message,
   );
-  const m = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(stderr || '');
-  if (!m) return null;
-  return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]);
+  const dm = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(stderr || '');
+  const duration = dm ? Number(dm[1]) * 3600 + Number(dm[2]) * 60 + Number(dm[3]) : null;
+  const fm = /(\d+(?:\.\d+)?)\s*fps/.exec(stderr || '');
+  const sourceFps = fm ? Number(fm[1]) : null;
+  return { duration, sourceFps };
 }
 
 async function extractFrames(videoPath, workDir, sampleFps) {
@@ -183,12 +185,17 @@ function toCoco17(keypoints, model, width, height) {
  * Throws with a user-presentable message when the video is unusable.
  */
 async function estimatePoseFromVideo(videoPath) {
-  const duration = (await probeDuration(videoPath)) || 10;
+  const probed = await probeVideo(videoPath);
+  const duration = probed.duration || 10;
   if (duration > 60) {
     throw new Error('Video is longer than 60 seconds — trim it to just the swing and try again.');
   }
-  // Sample as densely as the frame budget allows, between 10 and 24 fps.
-  const sampleFps = Math.min(24, Math.max(10, Math.floor(MAX_FRAMES / Math.max(duration, 1))));
+  // Sample as densely as the frame budget and the SOURCE frame rate allow
+  // (never above the source — duplicated frames poison motion timing).
+  // Higher sampling directly improves tempo accuracy: a driver downswing is
+  // ~0.3s, so 24fps gives it only ~7 frames while 48fps gives ~14.
+  const budgetFps = Math.floor(MAX_FRAMES / Math.max(duration, 1));
+  const sampleFps = Math.max(10, Math.min(48, probed.sourceFps || 30, budgetFps));
 
   const workDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'academy-frames-'));
   try {
@@ -231,4 +238,9 @@ async function estimatePoseFromVideo(videoPath) {
   }
 }
 
-module.exports = { estimatePoseFromVideo };
+/** Pre-initialize the TF backend + model so the first upload isn't slow. */
+async function warmUp() {
+  await getDetector();
+}
+
+module.exports = { estimatePoseFromVideo, warmUp };

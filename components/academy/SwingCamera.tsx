@@ -66,7 +66,14 @@ export default function SwingCamera({ visible, angleType, guidance, onClose, onR
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={styles.container}>
         {cameraPermission?.granted ? (
-          <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" mode="video" />
+          // 720p is plenty for pose tracking and keeps uploads small + fast.
+          <CameraView
+            ref={cameraRef}
+            style={StyleSheet.absoluteFill}
+            facing="back"
+            mode="video"
+            videoQuality="720p"
+          />
         ) : (
           <View style={[StyleSheet.absoluteFill, styles.permissionPane]}>
             {permissionDenied ? (
