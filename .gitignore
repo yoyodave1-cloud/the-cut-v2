@@ -4,3 +4,4 @@ node_modules/
 backend/academy/.env
 backend/academy/.env.*
 !backend/academy/.env.example
+swing-video-uploads/

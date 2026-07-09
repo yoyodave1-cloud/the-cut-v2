@@ -60,16 +60,21 @@ async function probeVideo(videoPath) {
   return { duration, sourceFps };
 }
 
-async function extractFrames(videoPath, workDir, sampleFps) {
+async function extractFrames(videoPath, workDir, sampleFps, startTime, segmentDuration) {
   await fs.promises.mkdir(workDir, { recursive: true });
   const pattern = path.join(workDir, 'frame-%05d.jpg');
-  await run(ffmpegPath(), [
-    '-i', videoPath,
+  const args = ['-i', videoPath];
+  // -ss AFTER -i: slower (decodes from the start) but frame-exact, which the
+  // phase timing needs. Clips are capped at 60s so the cost is trivial.
+  if (startTime != null) args.push('-ss', String(startTime));
+  if (segmentDuration != null) args.push('-t', String(segmentDuration));
+  args.push(
     '-vf', `fps=${sampleFps},scale='min(${TARGET_WIDTH},iw)':-2`,
     '-q:v', '4',
     '-frames:v', String(MAX_FRAMES),
     '-y', pattern,
-  ]);
+  );
+  await run(ffmpegPath(), args);
   const files = (await fs.promises.readdir(workDir))
     .filter((f) => f.startsWith('frame-') && f.endsWith('.jpg'))
     .sort();
@@ -182,24 +187,43 @@ function toCoco17(keypoints, model, width, height) {
 
 /**
  * Full pipeline: video path -> { fps, model, frames: [{t, k}] }.
+ *
+ * options.window = { start, duration } re-extracts only that segment of the
+ * video (used by the two-pass flow: coarse pass locates the swing, dense pass
+ * re-samples just the swing window at up to 48fps). Frame timestamps are
+ * always ABSOLUTE video times so client video-seek stays in sync.
+ *
  * Throws with a user-presentable message when the video is unusable.
  */
-async function estimatePoseFromVideo(videoPath) {
+async function estimatePoseFromVideo(videoPath, options = {}) {
   const probed = await probeVideo(videoPath);
-  const duration = probed.duration || 10;
-  if (duration > 60) {
+  const fullDuration = probed.duration || 10;
+  if (fullDuration > 60) {
     throw new Error('Video is longer than 60 seconds — trim it to just the swing and try again.');
   }
+  const window = options.window || null;
+  const startTime = window ? Math.max(0, window.start) : 0;
+  const duration = window
+    ? Math.min(window.duration, fullDuration - startTime)
+    : fullDuration;
+
   // Sample as densely as the frame budget and the SOURCE frame rate allow
   // (never above the source — duplicated frames poison motion timing).
   // Higher sampling directly improves tempo accuracy: a driver downswing is
   // ~0.3s, so 24fps gives it only ~7 frames while 48fps gives ~14.
-  const budgetFps = Math.floor(MAX_FRAMES / Math.max(duration, 1));
-  const sampleFps = Math.max(10, Math.min(48, probed.sourceFps || 30, budgetFps));
+  const frameBudget = options.maxFrames || MAX_FRAMES;
+  const budgetFps = Math.floor(frameBudget / Math.max(duration, 1));
+  const sampleFps = Math.max(8, Math.min(48, probed.sourceFps || 30, budgetFps));
 
   const workDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'academy-frames-'));
   try {
-    const frameFiles = await extractFrames(videoPath, workDir, sampleFps);
+    const frameFiles = await extractFrames(
+      videoPath,
+      workDir,
+      sampleFps,
+      window ? startTime : null,
+      window ? duration : null,
+    );
     if (frameFiles.length < 8) {
       throw new Error('Could not read enough frames from the video — is the file a valid video?');
     }
@@ -220,7 +244,8 @@ async function estimatePoseFromVideo(videoPath) {
           ? toCoco17(pose.keypoints, model, width, height)
           : new Array(17).fill(null).map(() => [0, 0, 0]);
         if (pose && pose.keypoints.some((kp) => (kp.score ?? 0) > 0.4)) detected++;
-        frames.push({ t: Number((i / sampleFps).toFixed(3)), k });
+        // Absolute video time, not segment-relative — client seeking depends on it.
+        frames.push({ t: Number((startTime + i / sampleFps).toFixed(3)), k });
       } finally {
         tensor.dispose();
       }
@@ -232,7 +257,7 @@ async function estimatePoseFromVideo(videoPath) {
       );
     }
 
-    return { fps: sampleFps, model, duration, aspect, frames };
+    return { fps: sampleFps, model, duration: fullDuration, aspect, frames };
   } finally {
     fs.promises.rm(workDir, { recursive: true, force: true }).catch(() => {});
   }

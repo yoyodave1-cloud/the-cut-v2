@@ -6,8 +6,8 @@
  * checkpoint_results, metrics).
  */
 
-const { smoothFrames, SKELETON_EDGES, KEYPOINT_NAMES } = require('./geometry');
-const { detectPhases } = require('./phases');
+const { smoothFrames, bridgeWristGaps, SKELETON_EDGES, KEYPOINT_NAMES } = require('./geometry');
+const { detectPhases, findSwingAnchor } = require('./phases');
 const { computeMetrics } = require('./metrics');
 const { getShotType } = require('./checkpoints');
 
@@ -108,7 +108,36 @@ async function analyzeVideo(videoPath, shotTypeId, angleType) {
   // the TF/ffmpeg dependency chain loaded.
   const { estimatePoseFromVideo } = require('./poseEstimation');
   const shotDef = getShotType(shotTypeId);
-  const pose = await estimatePoseFromVideo(videoPath);
+
+  // Two-pass extraction: real uploads often contain long stretches of
+  // non-swing footage (setup, tee pick-up, walking off), which both dilutes
+  // the frame budget (a 20s clip samples at ~14fps — too coarse for tempo)
+  // and used to let post-swing motion hijack the keyframes. Pass 1 samples
+  // the whole clip coarsely just to LOCATE the swing; pass 2 re-extracts only
+  // the swing window densely (up to 48fps). Short clips skip pass 2.
+  let pose = await estimatePoseFromVideo(videoPath, { maxFrames: 200 });
+  // Bridge motion-blur wrist dropouts before ANY motion analysis — a missing
+  // wrist otherwise reads as zero displacement (hands teleporting to address).
+  pose.frames = bridgeWristGaps(pose.frames);
+  const coarse = pose;
+  if (pose.duration > 8 || pose.fps < 20) {
+    try {
+      const { anchor } = findSwingAnchor(pose.frames, shotDef.swingClass);
+      const anchorT = pose.frames[anchor].t;
+      const start = Math.max(0, anchorT - 4.5);
+      const end = Math.min(pose.duration, anchorT + 2.5);
+      pose = await estimatePoseFromVideo(videoPath, {
+        window: { start, duration: end - start },
+      });
+      pose.frames = bridgeWristGaps(pose.frames);
+    } catch (err) {
+      // Fall back to the coarse pass — detectPhases will raise a proper
+      // user-facing error if there genuinely is no swing.
+      console.warn('[academy] dense re-extraction skipped:', err.message);
+      pose = coarse;
+    }
+  }
+
   // The rendered/measured skeleton gets 5-frame smoothing for a glitch-free
   // overlay, but phase timing runs on RAW frames: moving-average filtering
   // drags the top-of-backswing early and the impact crossing late on fast

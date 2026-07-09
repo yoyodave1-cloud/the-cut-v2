@@ -42,9 +42,15 @@ Migrations: `backend/supabase/migrations/academy.sql` + `academy_round2_local_vi
 (both applied to the live project, 2026-07-08).
 
 Local dev: `cd backend/academy && npm install && node server.js` (reads `.env`; listens
-on :4100 — point `ACADEMY_API_BASE` at your LAN IP). Tests: `node smokeTest.js` runs 25
-ground-truth keyframe/tempo cases (5 shot types × tempo/trim variants, no video needed);
+on :4100 — point `ACADEMY_API_BASE` at your LAN IP). Tests: `node smokeTest.js` runs 45
+ground-truth keyframe/tempo cases — 5 shot types × tempo/trim/aftermath variants including
+tee-pickup, walk-off, camera-grab, and motion-blur wrist dropout (no video needed);
 `node smokeTest.js swing.mp4 driving face_on` runs the full pipeline on a real clip.
+
+Phase detection is anchored on a swing-likeness search (ankle stillness, shoulder-height
+stability, hands-return-to-address, hand-height V), so footage before/after the swing —
+waggles, picking up the tee, walking off, grabbing the camera — can never claim a
+checkpoint. Long clips are re-sampled densely (two-pass) around the detected swing.
 
 `patches/academy.js` remains only for optionally mounting the same routes inside the
 shared `server.js` — not the deployed path.

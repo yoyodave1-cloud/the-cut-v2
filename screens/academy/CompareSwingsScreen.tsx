@@ -57,7 +57,9 @@ function frameAtU(jad: JointAngleData, sharedPhases: string[], u: number): numbe
   const s = Math.floor(scaled);
   const local = scaled - s;
   const t = anchors[s].t + (anchors[s + 1].t - anchors[s].t) * local;
-  return Math.max(0, Math.min(jad.frames.length - 1, Math.round(t * jad.fps)));
+  // Frame timestamps are absolute video times (may not start at 0).
+  const baseT = jad.frames[0]?.t ?? 0;
+  return Math.max(0, Math.min(jad.frames.length - 1, Math.round((t - baseT) * jad.fps)));
 }
 
 type PaneData = {

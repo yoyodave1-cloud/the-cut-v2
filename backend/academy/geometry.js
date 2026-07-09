@@ -202,6 +202,41 @@ function pointSpeeds(frames, getPoint, smooth = true) {
   });
 }
 
+/**
+ * Bridge short low-confidence gaps in the wrist tracks by linear
+ * interpolation. Motion blur at the fastest part of a downswing routinely
+ * drops MoveNet's wrist confidence below threshold for a few frames; treating
+ * those frames as "no wrist" poisons displacement/speed series (a null reads
+ * as zero displacement — i.e. hands teleporting back to address) and makes
+ * the overlay flicker. Bridged points carry a low score (0.3) so they remain
+ * visibly distinguishable from tracked ones downstream.
+ */
+function bridgeWristGaps(frames, maxGapFrames = 8) {
+  const out = frames.map((f) => ({ ...f, k: f.k.map((kp) => (kp ? [...kp] : kp)) }));
+  for (const kpIdx of [KP.leftWrist, KP.rightWrist]) {
+    let lastValid = -1;
+    for (let i = 0; i < out.length; i++) {
+      const kp = out[i].k[kpIdx];
+      const valid = kp && kp[2] >= MIN_SCORE;
+      if (!valid) continue;
+      if (lastValid >= 0 && i - lastValid > 1 && i - lastValid - 1 <= maxGapFrames) {
+        const a = out[lastValid].k[kpIdx];
+        const b = kp;
+        for (let j = lastValid + 1; j < i; j++) {
+          const u = (j - lastValid) / (i - lastValid);
+          out[j].k[kpIdx] = [
+            Number((a[0] + (b[0] - a[0]) * u).toFixed(4)),
+            Number((a[1] + (b[1] - a[1]) * u).toFixed(4)),
+            0.3,
+          ];
+        }
+      }
+      lastValid = i;
+    }
+  }
+  return out;
+}
+
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
 }
@@ -228,6 +263,7 @@ module.exports = {
   wristPoint,
   smoothFrames,
   pointSpeeds,
+  bridgeWristGaps,
   clamp,
   round,
 };

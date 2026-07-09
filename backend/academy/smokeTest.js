@@ -11,7 +11,7 @@
  *    pipeline end-to-end:  node smokeTest.js path\to\swing.mp4 driving face_on
  */
 
-const { smoothFrames } = require('./geometry');
+const { smoothFrames, bridgeWristGaps } = require('./geometry');
 const { detectPhases } = require('./phases');
 const { computeMetrics } = require('./metrics');
 const { evaluate } = require('./analyze');
@@ -31,49 +31,87 @@ function ease(u) {
 
 /**
  * Parametric face-on golfer. u values (0..1) morph address -> top -> impact -> finish.
+ * shoulderDrop lowers the upper body (bending down); bodyShift translates the
+ * whole figure including the feet (walking).
  */
-function golferFrame(t, { handX, handY, turn, hipShift }) {
-  const cx = 0.5 + hipShift;
+function golferFrame(t, { handX, handY, turn, hipShift, shoulderDrop = 0, bodyShift = 0 }) {
+  const cx = 0.5 + hipShift + bodyShift;
   const shoulderW = 0.07 * Math.cos((turn * Math.PI) / 180);
   const hipW = 0.05 * Math.cos((turn * 0.5 * Math.PI) / 180);
+  const hx = handX + bodyShift;
   const k = new Array(17).fill(null);
   const p = (x, y) => [Number(x.toFixed(4)), Number(y.toFixed(4)), 0.9];
-  k[0] = p(cx, 0.28);
-  k[1] = p(cx - 0.01, 0.27);
-  k[2] = p(cx + 0.01, 0.27);
-  k[3] = p(cx - 0.02, 0.28);
-  k[4] = p(cx + 0.02, 0.28);
-  k[5] = p(cx - shoulderW, 0.35);
-  k[6] = p(cx + shoulderW, 0.35);
-  k[7] = p(lerp(cx - 0.09, handX, 0.5), lerp(0.44, handY, 0.5));
-  k[8] = p(lerp(cx + 0.09, handX, 0.5), lerp(0.44, handY, 0.5));
-  k[9] = p(handX - 0.005, handY);
-  k[10] = p(handX + 0.005, handY);
+  k[0] = p(cx, 0.28 + shoulderDrop);
+  k[1] = p(cx - 0.01, 0.27 + shoulderDrop);
+  k[2] = p(cx + 0.01, 0.27 + shoulderDrop);
+  k[3] = p(cx - 0.02, 0.28 + shoulderDrop);
+  k[4] = p(cx + 0.02, 0.28 + shoulderDrop);
+  k[5] = p(cx - shoulderW, 0.35 + shoulderDrop);
+  k[6] = p(cx + shoulderW, 0.35 + shoulderDrop);
+  k[7] = p(lerp(cx - 0.09, hx, 0.5), lerp(0.44 + shoulderDrop, handY, 0.5));
+  k[8] = p(lerp(cx + 0.09, hx, 0.5), lerp(0.44 + shoulderDrop, handY, 0.5));
+  k[9] = p(hx - 0.005, handY);
+  k[10] = p(hx + 0.005, handY);
   k[11] = p(cx - hipW, 0.55);
   k[12] = p(cx + hipW, 0.55);
-  k[13] = p(0.45, 0.72);
-  k[14] = p(0.55, 0.72);
-  k[15] = p(0.44, 0.9);
-  k[16] = p(0.56, 0.9);
+  k[13] = p(0.45 + bodyShift, 0.72);
+  k[14] = p(0.55 + bodyShift, 0.72);
+  k[15] = p(0.44 + bodyShift, 0.9);
+  k[16] = p(0.56 + bodyShift, 0.9);
   return { t: Number(t.toFixed(3)), k };
+}
+
+/**
+ * Post-swing motion appended after the finish hold — reproduces what real
+ * uploads contain and what originally broke detection: bending down to pick
+ * up the tee (shoulders drop, hands to the ground, feet planted), walking
+ * off (whole body translates), and grabbing the camera (a hand burst FASTER
+ * than the downswing right at the clip end).
+ */
+function postMotionState(kind, u, finish) {
+  if (kind === 'pickup') {
+    const phase = Math.sin(Math.PI * ease(u)); // down then back up
+    return {
+      handX: lerp(finish.handX, 0.52, phase),
+      handY: lerp(finish.handY, 0.86, phase),
+      turn: finish.turn,
+      hipShift: finish.hipShift,
+      shoulderDrop: 0.22 * phase,
+    };
+  }
+  if (kind === 'walk') {
+    return { ...finish, bodyShift: 0.28 * ease(u) };
+  }
+  // 'grab': still, then a very fast hand move toward the camera at the end.
+  if (u < 0.55) return finish;
+  const g = ease((u - 0.55) / 0.45);
+  return {
+    ...finish,
+    handX: lerp(finish.handX, 0.72, g),
+    handY: lerp(finish.handY, 0.5, g),
+    shoulderDrop: 0.08 * g,
+  };
 }
 
 /**
  * Build a synthetic swing and return frames + ground-truth phase times.
  */
-function makeSwing(params, { still1 = 0.8, still2 = 0.6, followDur = 0.5 } = {}) {
+function makeSwing(params, { still1 = 0.8, still2 = 0.6, followDur = 0.5, postMotion = null, postDur = 1.8, blurGap = false } = {}) {
   const addr = { handX: 0.5, handY: 0.58, turn: 0, hipShift: 0 };
   const topP = { handX: params.topX, handY: params.topY, turn: params.topTurn, hipShift: 0.01 };
   const impact = { handX: 0.5, handY: 0.58, turn: 5, hipShift: -0.015 };
   const finish = { handX: params.finishX, handY: params.finishY, turn: params.finishTurn, hipShift: -0.02 };
 
   const frames = [];
-  const total = still1 + params.backDur + params.downDur + followDur + still2;
+  const swingEnd = still1 + params.backDur + params.downDur + followDur + still2;
+  const total = swingEnd + (postMotion ? postDur : 0);
   const n = Math.round(total * FPS);
   for (let i = 0; i <= n; i++) {
     const t = i / FPS;
     let s;
-    if (t < still1) s = addr;
+    if (t >= swingEnd && postMotion) {
+      s = postMotionState(postMotion, (t - swingEnd) / postDur, finish);
+    } else if (t < still1) s = addr;
     else if (t < still1 + params.backDur) {
       const u = ease((t - still1) / params.backDur);
       s = {
@@ -102,6 +140,16 @@ function makeSwing(params, { still1 = 0.8, still2 = 0.6, followDur = 0.5 } = {})
     frames.push(golferFrame(t, s));
   }
 
+  // Simulate motion-blur wrist dropout mid-backswing (MoveNet does this on
+  // real footage at the fastest parts of the move).
+  if (blurGap) {
+    const gi = Math.round((still1 + params.backDur * 0.55) * FPS);
+    for (let j = gi; j < gi + 3 && j < frames.length; j++) {
+      frames[j].k[9][2] = 0.1;
+      frames[j].k[10][2] = 0.1;
+    }
+  }
+
   const truth = {
     takeaway: still1,
     top: still1 + params.backDur,
@@ -119,13 +167,21 @@ const SWING_PARAMS = {
   putting: { backDur: 0.55, downDur: 0.28, topX: 0.555, topY: 0.575, topTurn: 6, finishX: 0.44, finishY: 0.57, finishTurn: 8 },
 };
 
-/** Tempo/trim variants — outcome: phases must hold across all of them. */
+/**
+ * Tempo/trim/aftermath variants — phases must hold across all of them.
+ * The three post-motion variants reproduce the real-footage bug where
+ * incidental movement after the swing hijacked the keyframes.
+ */
 const VARIANTS = [
   { name: 'normal', scaleBack: 1, scaleDown: 1, opts: {} },
   { name: 'fast', scaleBack: 0.6, scaleDown: 0.6, opts: {} },
   { name: 'slow', scaleBack: 1.7, scaleDown: 1.5, opts: {} },
   { name: 'trimmed-start', scaleBack: 1, scaleDown: 1, opts: { still1: 0.04 } },
   { name: 'long-tail', scaleBack: 1, scaleDown: 1, opts: { still2: 2.5 } },
+  { name: 'tee-pickup', scaleBack: 1, scaleDown: 1, opts: { postMotion: 'pickup' } },
+  { name: 'walk-off', scaleBack: 1, scaleDown: 1, opts: { postMotion: 'walk', postDur: 2.4 } },
+  { name: 'camera-grab', scaleBack: 1, scaleDown: 1, opts: { postMotion: 'grab', postDur: 1.2 } },
+  { name: 'blur-gap', scaleBack: 1, scaleDown: 1, opts: { blurGap: true } },
 ];
 
 function assertPhase(name, detectedIdx, truthT, tolEarly, tolLate, errors) {
@@ -153,9 +209,11 @@ async function runSynthetic() {
       };
       const label = `${shotTypeId.padEnd(9)} ${variant.name.padEnd(14)}`;
       try {
-        const { frames: raw, truth } = makeSwing(params, variant.opts);
+        // Mirror analyze.js: bridge wrist dropouts, then phase timing on raw
+        // frames and metrics on smoothed frames.
+        const { frames: generated, truth } = makeSwing(params, variant.opts);
+        const raw = bridgeWristGaps(generated);
         const frames = smoothFrames(raw, 5);
-        // Mirror analyze.js: phase timing on raw frames, metrics on smoothed.
         const phases = detectPhases(raw, def.swingClass);
         const { address, takeaway, top, impact, finish } = phases.indices;
 

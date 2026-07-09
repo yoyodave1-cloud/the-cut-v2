@@ -184,7 +184,10 @@ export default function SwingAnalysisScreen({ navigation, route }: Props) {
   const nearestFrame = useCallback(
     (t: number) => {
       if (!frameCount || !jad) return 0;
-      const idx = Math.round(t * jad.fps);
+      // Frame timestamps are absolute video times and may not start at 0
+      // (the backend re-samples just the swing window on long clips).
+      const baseT = jad.frames[0]?.t ?? 0;
+      const idx = Math.round((t - baseT) * jad.fps);
       return Math.max(0, Math.min(frameCount - 1, idx));
     },
     [frameCount, jad],
