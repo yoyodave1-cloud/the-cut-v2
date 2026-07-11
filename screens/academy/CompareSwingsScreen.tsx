@@ -22,14 +22,22 @@ import { cacheDetail, getCachedDetail, getDemoDetail } from '../../lib/academy/d
 import { makeDemoSequence } from '../../lib/academy/demoData';
 import { getAcademyUserId } from '../../lib/academy/userId';
 import SkeletonOverlay from '../../components/academy/SkeletonOverlay';
-import type { JointAngleData, SessionSummary } from '../../lib/academy/types';
+import {
+  averageDeviations,
+  deviationPerKeypoint,
+  normalizeSequence,
+} from '../../lib/academy/poseNormalize';
+import type { JointAngleData, PoseFrame, SessionSummary } from '../../lib/academy/types';
 import type { AcademyStackParamList } from '../../navigation/academyStackTypes';
 
 type Props = NativeStackScreenProps<AcademyStackParamList, 'CompareSwings'>;
 
 const SCREEN_W = Dimensions.get('window').width;
 const PANE_W = (SCREEN_W - 32 - 8) / 2;
+const OVERLAY_W = SCREEN_W - 32;
 const PHASE_ORDER = ['address', 'takeaway', 'top', 'impact', 'finish'];
+
+const clampIndex = (i: number, len: number) => Math.max(0, Math.min(len - 1, i));
 
 /** Anchor keyframes present in a sequence, in canonical phase order. */
 function anchorsOf(jad: JointAngleData) {
@@ -133,6 +141,7 @@ export default function CompareSwingsScreen({ navigation, route }: Props) {
   const [loadingRef, setLoadingRef] = useState(false);
   const [u, setU] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [mode, setMode] = useState<'overlay' | 'side'>('overlay');
 
   // Load "your swing" side.
   useEffect(() => {
@@ -209,6 +218,19 @@ export default function CompareSwingsScreen({ navigation, route }: Props) {
       .filter((p) => leftSet.has(p));
   }, [leftJad, refJad]);
 
+  // Overlay mode: mirror the user when handedness differs from the reference,
+  // then pre-normalize both sequences (hip-anchored, torso-rescaled) so the
+  // two figures are spatially comparable regardless of framing or height.
+  const mirror = !!leftJad && !!refJad && leftJad.lead_side !== refJad.lead_side;
+  const userNorm = useMemo(
+    () => (leftJad ? normalizeSequence(leftJad.frames, mirror) : []),
+    [leftJad, mirror],
+  );
+  const refNorm = useMemo(
+    () => (refJad ? normalizeSequence(refJad.frames, false) : []),
+    [refJad],
+  );
+
   // Playback: advance u so the LEFT side's swing plays at natural speed.
   useEffect(() => {
     if (!playing || !leftJad) return undefined;
@@ -267,6 +289,22 @@ export default function CompareSwingsScreen({ navigation, route }: Props) {
 
   const segments = Math.max(1, sharedPhases.length - 1);
 
+  // Overlay pane is a square canvas so x/y scale uniformly (normalized poses
+  // are not tied to the video aspect); capped by the same max as the panes.
+  const overlayH = Math.min(OVERLAY_W, 360);
+  const userNF: PoseFrame | null = userNorm[leftIndex] ?? null;
+  const refNF: PoseFrame | null = refNorm[refIndex] ?? null;
+
+  // 3-frame moving average of per-keypoint deviation, to stop colours flickering
+  // frame-to-frame on tracking jitter.
+  const devWindows: (number | null)[][] = [];
+  for (const o of [-1, 0, 1]) {
+    const uf = userNorm[clampIndex(leftIndex + o, userNorm.length)];
+    const rf = refNorm[clampIndex(refIndex + o, refNorm.length)];
+    if (uf && rf) devWindows.push(deviationPerKeypoint(uf, rf));
+  }
+  const smoothedDev = devWindows.length ? averageDeviations(devWindows) : undefined;
+
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
@@ -278,6 +316,24 @@ export default function CompareSwingsScreen({ navigation, route }: Props) {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        {/* Overlay / side-by-side toggle */}
+        <View style={styles.modeToggle}>
+          {(['overlay', 'side'] as const).map((m) => {
+            const active = mode === m;
+            return (
+              <TouchableOpacity
+                key={m}
+                style={[styles.modeOption, active && { backgroundColor: accent }]}
+                onPress={() => setMode(m)}
+              >
+                <Text style={[styles.modeText, active && styles.modeTextActive]}>
+                  {m === 'overlay' ? 'Overlay' : 'Side by side'}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
         {/* Reference selector */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.refRow}>
           <TouchableOpacity
@@ -306,30 +362,79 @@ export default function CompareSwingsScreen({ navigation, route }: Props) {
           })}
         </ScrollView>
 
-        {/* Split screen */}
-        <View style={styles.panesRow}>
-          <ComparePane
-            pane={{ label: 'You', jad: leftJad, videoUrl: leftVideo, accent }}
-            frameIndex={leftIndex}
-            height={paneH}
-          />
-          {loadingRef ? (
-            <View style={[styles.pane, styles.paneLoading, { height: paneH }]}>
-              <ActivityIndicator color={accent} />
+        {/* Overlay: both figures on one navy pane, user coloured by deviation */}
+        {mode === 'overlay' && (
+          <>
+            <View style={[styles.pane, styles.overlayPane, { width: OVERLAY_W, height: overlayH }]}>
+              {loadingRef ? (
+                <ActivityIndicator color={accent} />
+              ) : (
+                <View style={{ width: overlayH, height: overlayH }}>
+                  {/* Reference: recessive grey, no deviation colouring */}
+                  <SkeletonOverlay
+                    frame={refNF}
+                    edges={refJad.skeleton_edges}
+                    width={overlayH}
+                    height={overlayH}
+                    color="rgba(138,155,176,0.85)"
+                  />
+                  {/* User: coloured per-limb by deviation from the reference */}
+                  <SkeletonOverlay
+                    frame={userNF}
+                    edges={leftJad.skeleton_edges}
+                    width={overlayH}
+                    height={overlayH}
+                    color={accent}
+                    deviations={smoothedDev}
+                  />
+                </View>
+              )}
+              <View style={styles.paneLabel}>
+                <Text style={styles.paneLabelText}>You vs reference</Text>
+              </View>
             </View>
-          ) : (
+            <View style={styles.legendRow}>
+              {[
+                { c: colors.birdieGreen, t: 'On track' },
+                { c: colors.eagleAmber, t: 'Drifting' },
+                { c: colors.bogeyRed, t: 'Off position' },
+                { c: colors.coolGrey, t: 'Not tracked' },
+              ].map((item) => (
+                <View key={item.t} style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: item.c }]} />
+                  <Text style={styles.legendText}>{item.t}</Text>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
+        {/* Side by side: user swing vs reference in separate video-backed panes */}
+        {mode === 'side' && (
+          <View style={styles.panesRow}>
             <ComparePane
-              pane={{
-                label: refChoice === 'ideal' ? 'Good position' : 'Earlier swing',
-                jad: refJad,
-                videoUrl: refVideo,
-                accent: colors.birdieGreen,
-              }}
-              frameIndex={refIndex}
+              pane={{ label: 'You', jad: leftJad, videoUrl: leftVideo, accent }}
+              frameIndex={leftIndex}
               height={paneH}
             />
-          )}
-        </View>
+            {loadingRef ? (
+              <View style={[styles.pane, styles.paneLoading, { height: paneH }]}>
+                <ActivityIndicator color={accent} />
+              </View>
+            ) : (
+              <ComparePane
+                pane={{
+                  label: refChoice === 'ideal' ? 'Good position' : 'Earlier swing',
+                  jad: refJad,
+                  videoUrl: refVideo,
+                  accent: colors.birdieGreen,
+                }}
+                frameIndex={refIndex}
+                height={paneH}
+              />
+            )}
+          </View>
+        )}
 
         {/* Synced scrubber */}
         <View style={styles.scrubCard}>
@@ -435,6 +540,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  modeToggle: {
+    flexDirection: 'row',
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 3,
+    marginTop: 8,
+  },
+  modeOption: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 9,
+    alignItems: 'center',
+  },
+  modeText: {
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+    color: colors.coolGrey,
+  },
+  modeTextActive: {
+    color: '#FFFFFF',
+  },
   refRow: {
     marginTop: 6,
     marginBottom: 10,
@@ -468,6 +596,32 @@ const styles = StyleSheet.create({
   },
   paneBg: {
     backgroundColor: colors.navy,
+  },
+  overlayPane: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  legendRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  legendDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+  },
+  legendText: {
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+    color: colors.coolGrey,
   },
   paneLoading: {
     alignItems: 'center',
