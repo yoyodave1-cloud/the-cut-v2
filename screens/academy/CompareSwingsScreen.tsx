@@ -21,7 +21,7 @@ import { getLocalVideoUri } from '../../lib/academy/localVideo';
 import { cacheDetail, getCachedDetail, getDemoDetail } from '../../lib/academy/detailCache';
 import { makeDemoSequence } from '../../lib/academy/demoData';
 import { getAcademyUserId } from '../../lib/academy/userId';
-import SkeletonOverlay from '../../components/academy/SkeletonOverlay';
+import AvatarFigure from '../../components/academy/AvatarFigure';
 import {
   averageDeviations,
   deviationPerKeypoint,
@@ -113,7 +113,7 @@ function ComparePane({
       ) : (
         <View style={[styles.paneBg, { width: PANE_W, height }]} />
       )}
-      <SkeletonOverlay
+      <AvatarFigure
         frame={frame}
         edges={pane.jad.skeleton_edges}
         width={PANE_W}
@@ -371,15 +371,16 @@ export default function CompareSwingsScreen({ navigation, route }: Props) {
               ) : (
                 <View style={{ width: overlayH, height: overlayH }}>
                   {/* Reference: recessive grey, no deviation colouring */}
-                  <SkeletonOverlay
+                  <AvatarFigure
                     frame={refNF}
                     edges={refJad.skeleton_edges}
                     width={overlayH}
                     height={overlayH}
                     color="rgba(138,155,176,0.85)"
+                    recessive
                   />
                   {/* User: coloured per-limb by deviation from the reference */}
-                  <SkeletonOverlay
+                  <AvatarFigure
                     frame={userNF}
                     edges={leftJad.skeleton_edges}
                     width={overlayH}

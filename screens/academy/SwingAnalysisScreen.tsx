@@ -20,6 +20,7 @@ import { fetchUploadDetail, pollUploadUntilDone } from '../../lib/academy/api';
 import { getLocalVideoUri } from '../../lib/academy/localVideo';
 import { cacheDetail, getCachedDetail, getDemoDetail } from '../../lib/academy/detailCache';
 import SkeletonOverlay from '../../components/academy/SkeletonOverlay';
+import AvatarFigure from '../../components/academy/AvatarFigure';
 import FrameScrubber from '../../components/academy/FrameScrubber';
 import type {
   CheckResult,
@@ -318,13 +319,25 @@ export default function SwingAnalysisScreen({ navigation, route }: Props) {
           ) : (
             <View style={[styles.skeletonBg, { width: videoW, height: videoH }]} />
           )}
-          <SkeletonOverlay
-            frame={frames[frameIndex] ?? null}
-            edges={jad.skeleton_edges}
-            width={videoW}
-            height={videoH}
-            color={accent}
-          />
+          {videoUrl ? (
+            // On-video overlay: unchanged (known timing issue is out of scope).
+            <SkeletonOverlay
+              frame={frames[frameIndex] ?? null}
+              edges={jad.skeleton_edges}
+              width={videoW}
+              height={videoH}
+              color={accent}
+            />
+          ) : (
+            // Skeleton-only fallback (no video): polished avatar.
+            <AvatarFigure
+              frame={frames[frameIndex] ?? null}
+              edges={jad.skeleton_edges}
+              width={videoW}
+              height={videoH}
+              color={accent}
+            />
+          )}
           {currentAngles ? (
             <View style={styles.calloutCard}>
               {callouts.map((c) => {
