@@ -14,9 +14,10 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Article,
+  FeaturedPodcastPick,
   VideoItem,
   fetchCreatorFeaturedVideos,
-  fetchCreatorPageNews,
+  fetchDailyFeaturedPodcastPicks,
   fetchInstructionalCarouselVideos,
   fetchNewsPage,
   fetchTourLatestVideosByCreatorName,
@@ -27,6 +28,7 @@ import GlowBlob from '../components/GlowBlob';
 import TornDivider from '../components/TornDivider';
 import HotRightNowCard from '../components/cards/HotRightNowCard';
 import { NewsCardCompact } from '../components/FeedNewsCards';
+import FeaturedPodcastCard from '../components/FeaturedPodcastCard';
 import { VideoCarousel } from '../components/VideoFeedCards';
 import { colors } from '../constants/colors';
 import heroReel from '../assets/gap-video.mp4';
@@ -239,13 +241,15 @@ function CreatorGolfBlock({
   subtitle,
   videos,
   articles,
+  podcastPicks,
   seeAllLabel,
   onSeeAll,
   last,
 }: {
   subtitle: string;
   videos: VideoItem[];
-  articles: Article[];
+  articles?: Article[];
+  podcastPicks?: FeaturedPodcastPick[];
   seeAllLabel: string;
   onSeeAll: () => void;
   last?: boolean;
@@ -259,9 +263,13 @@ function CreatorGolfBlock({
         </View>
       ) : null}
       <View style={styles.newsWrap}>
-        {articles.map((article) => (
-          <NewsCardCompact key={article.url || article.title} article={article} />
-        ))}
+        {podcastPicks
+          ? podcastPicks.map((pick) => (
+              <FeaturedPodcastCard key={pick.videoId || pick.podcastName} pick={pick} />
+            ))
+          : (articles ?? []).map((article) => (
+              <NewsCardCompact key={article.url || article.title} article={article} />
+            ))}
         <SeeAllLink label={seeAllLabel} scheme="dark" onPress={onSeeAll} />
       </View>
     </HomeSection>
@@ -278,7 +286,7 @@ type HomeFeed = {
   livVideos: VideoItem[];
   livNews: Article[];
   podcastVideos: VideoItem[];
-  podcastNews: Article[];
+  podcastPicks: FeaturedPodcastPick[];
   instructionalVideos: VideoItem[];
   instructionalNews: Article[];
   productVideos: VideoItem[];
@@ -295,7 +303,7 @@ const EMPTY_FEED: HomeFeed = {
   livVideos: [],
   livNews: [],
   podcastVideos: [],
-  podcastNews: [],
+  podcastPicks: [],
   instructionalVideos: [],
   instructionalNews: [],
   productVideos: [],
@@ -325,7 +333,7 @@ async function loadHomeFeed(): Promise<HomeFeed> {
     livVideos,
     livNews,
     podcastVideos,
-    podcastNews,
+    podcastPicks,
     instructionalVideos,
     instructionalNews,
     productVideos,
@@ -343,7 +351,7 @@ async function loadHomeFeed(): Promise<HomeFeed> {
     fetchTourLatestVideosByCreatorName('LIV Golf', VIDEO_LIMIT),
     fetchNewsPage({ q: '"LIV Golf"', pageSize: NEWS_LIMIT }),
     fetchCreatorFeaturedVideos(),
-    fetchCreatorPageNews(NEWS_LIMIT, 0),
+    fetchDailyFeaturedPodcastPicks(),
     fetchInstructionalCarouselVideos(),
     fetchNewsPage({ q: 'golf (instruction OR instructional OR lesson)', pageSize: NEWS_LIMIT }),
     fetchVideosMatchingKeyword(PRODUCT_TEST_KEYWORD, VIDEO_LIMIT),
@@ -360,10 +368,7 @@ async function loadHomeFeed(): Promise<HomeFeed> {
     livVideos: settledList(livVideos, 'LIV Golf videos'),
     livNews: settledNews(livNews, 'LIV Golf news'),
     podcastVideos: settledList(podcastVideos, 'podcast videos'),
-    podcastNews:
-      podcastNews.status === 'fulfilled'
-        ? podcastNews.value.compact.slice(0, NEWS_LIMIT)
-        : (console.warn('[The Cut] podcast news failed:', podcastNews.reason), []),
+    podcastPicks: settledList(podcastPicks, 'podcast featured picks'),
     instructionalVideos: settledList(instructionalVideos, 'instructional videos'),
     instructionalNews: settledNews(instructionalNews, 'instructional news'),
     productVideos: settledList(productVideos, 'product test videos'),
@@ -431,7 +436,7 @@ function HomeTabBody() {
         <CreatorGolfBlock
           subtitle="Podcasts"
           videos={feed.podcastVideos}
-          articles={feed.podcastNews}
+          podcastPicks={feed.podcastPicks}
           seeAllLabel="See all podcasts →"
           onSeeAll={goCreators}
         />

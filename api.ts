@@ -117,6 +117,65 @@ export async function fetchTourLatestVideos(
   return normalizeVideoList(await res.json());
 }
 
+/** Latest tour-channel videos whose creator name matches (e.g. "PGA Tour"). */
+export async function fetchTourLatestVideosByCreatorName(
+  creatorName: string,
+  limit = 10,
+): Promise<VideoItem[]> {
+  const pool = await fetchTourLatestVideos(50);
+  const needle = creatorName.trim().toLowerCase();
+  return pool
+    .filter((video) => (video.creator?.name ?? '').trim().toLowerCase() === needle)
+    .slice(0, limit);
+}
+
+function videoMatchesKeyword(video: VideoItem, keyword: string): boolean {
+  const needle = keyword.trim().toLowerCase();
+  if (!needle) return false;
+  const blob = `${video.title} ${video.summary ?? ''} ${video.creator?.name ?? ''}`.toLowerCase();
+  return blob.includes(needle);
+}
+
+/** Scan ranked creator videos for a keyword in title / summary / creator name. */
+export async function fetchVideosMatchingKeyword(
+  keyword: string,
+  limit = 8,
+): Promise<VideoItem[]> {
+  const matches: VideoItem[] = [];
+  const seen = new Set<string>();
+  for (let offset = 0; offset < 150 && matches.length < limit; offset += 50) {
+    const page = await fetchTopVideos(50, offset);
+    if (!page.length) break;
+    for (const video of page) {
+      if (!video.videoId || seen.has(video.videoId)) continue;
+      if (!videoMatchesKeyword(video, keyword)) continue;
+      seen.add(video.videoId);
+      matches.push(video);
+      if (matches.length >= limit) break;
+    }
+    if (page.length < 50) break;
+  }
+  return matches.slice(0, limit);
+}
+
+/** One lesson from each short-game / full-swing library topic for the Instructional carousel. */
+export async function fetchInstructionalCarouselVideos(): Promise<VideoItem[]> {
+  const content = await fetchShortGameVideos();
+  const videos: VideoItem[] = [];
+  for (const group of content.mainTopics) {
+    const first = group.subTopics.find((sub) => sub.videos.length > 0)?.videos[0];
+    if (!first) continue;
+    videos.push({
+      videoId: first.youtubeVideoId,
+      title: first.title,
+      publishedAt: '',
+      thumbnailUrl: first.thumbnailUrl,
+      creator: first.channelName ? { name: first.channelName } : undefined,
+    });
+  }
+  return videos;
+}
+
 export type TopCreator = {
   id: string;
   name: string;
@@ -450,6 +509,43 @@ export async function fetchCreatorFeaturedVideos(): Promise<VideoItem[]> {
   const json = (await res.json()) as { videos?: CreatorVideoRow[] };
   const rows = Array.isArray(json.videos) ? json.videos : [];
   return rows.map((row) => creatorVideoRowToVideoItem(row));
+}
+
+export type FeaturedPodcastPick = {
+  videoId: string;
+  title: string;
+  publishedAt: string;
+  applePodcastId: string;
+  podcastName: string;
+};
+
+type FeaturedPodcastPickRow = CreatorVideoRow & {
+  applePodcastId?: string;
+};
+
+export async function fetchDailyFeaturedPodcastPicks(): Promise<FeaturedPodcastPick[]> {
+  const res = await fetch(`${API_BASE}/creator-videos?featured=podcast&pick=3daily`);
+  if (!res.ok) {
+    throw new Error(`creator-videos featured=podcast pick=3daily failed (${res.status})`);
+  }
+  const json = (await res.json()) as { videos?: FeaturedPodcastPickRow[] };
+  const rows = Array.isArray(json.videos) ? json.videos : [];
+  return rows
+    .map((row) => {
+      const videoId = row.videoId?.trim();
+      const applePodcastId = row.applePodcastId?.trim() ?? '';
+      const podcastName = row.creator?.name?.trim() ?? '';
+      if (!videoId || !applePodcastId || !podcastName) return null;
+      return {
+        videoId,
+        title: row.title ?? '',
+        publishedAt: row.publishedAt ?? '',
+        applePodcastId,
+        podcastName,
+      };
+    })
+    .filter((row): row is FeaturedPodcastPick => row != null)
+    .slice(0, 3);
 }
 
 export const MASTERCLASS_MAIN_TOPICS = [

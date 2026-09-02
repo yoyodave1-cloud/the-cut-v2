@@ -111,7 +111,48 @@ function latestVideoPerCreator(rows) {
   return byCreatorId;
 }
 
-async function fetchFeaturedPodcastVideoRows(supabase) {
+function localDayOfYear(now) {
+  const start = new Date(now.getFullYear(), 0, 1);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.floor((today.getTime() - start.getTime()) / 86400000) + 1;
+}
+
+/**
+ * Daily Home featured cards — shuffle the 8 sources by day-of-year and take 3.
+ * Seed is intentionally different from the twice-daily carousel rotation.
+ */
+function pickDailyFeaturedPodcastVideos(videosByChannelId, now = new Date()) {
+  const seed = `home-cards-${now.getFullYear()}-${localDayOfYear(now)}`;
+  return seededShuffle([...PODCAST_CHANNEL_IDS], seed)
+    .map((channelId) => videosByChannelId.get(channelId))
+    .filter(Boolean)
+    .slice(0, 3);
+}
+
+function isDailyPodcastPickRequest(req) {
+  return (
+    isFeaturedPodcastRequest(req) &&
+    firstQueryValue(req.query.pick).toLowerCase() === "3daily"
+  );
+}
+
+/** Apple Podcasts collection IDs keyed by YouTube channel_id (artwork via iTunes Lookup). */
+const APPLE_PODCAST_ID_BY_CHANNEL = {
+  "UCZNEuuyLZQt5H9lUqImc0CQ": "1406443091",
+  "UC-7RYbWkDhY2FjYEXBGXUMQ": "1200343264",
+  "UCZn1UAWT9W0pLTWCdt8CTBg": "880837011",
+  "UC1lZT-3zObkaPerEyjxtA_w": "880837011",
+  "UCt5ESUx6omMUsMoEKvMTzlA": "1498625027",
+  "UCEWo2BUWvCgRXSD1Xg3QOtQ": "1663329120",
+  "UCc5JXe0hSVA-VOh0x5qkXag": "1131723994",
+  "UCa98aY7eenHS_YhehF-vuEQ": "1198293635",
+};
+
+function applePodcastIdForChannel(channelId) {
+  return APPLE_PODCAST_ID_BY_CHANNEL[String(channelId || "").trim()] || "";
+}
+
+async function fetchLatestPodcastVideosByChannelId(supabase) {
   const { data: creators, error: creatorsError } = await supabase
     .from("creators")
     .select("id, channel_id")
@@ -123,7 +164,9 @@ async function fetchFeaturedPodcastVideoRows(supabase) {
   }
 
   const podcastCreators = Array.isArray(creators) ? creators : [];
-  if (!podcastCreators.length) return [];
+  if (!podcastCreators.length) {
+    return { videosByChannelId: new Map(), channelIdByCreatorId: new Map() };
+  }
 
   const creatorIds = podcastCreators.map((row) => row.id).filter(Boolean);
   const channelIdByCreatorId = new Map(
@@ -151,11 +194,39 @@ async function fetchFeaturedPodcastVideoRows(supabase) {
     videosByChannelId.set(String(channelId).trim(), row);
   }
 
+  return { videosByChannelId, channelIdByCreatorId };
+}
+
+async function fetchFeaturedPodcastVideoRows(supabase) {
+  const { videosByChannelId } = await fetchLatestPodcastVideosByChannelId(supabase);
   return orderFeaturedPodcastVideos(videosByChannelId);
+}
+
+function mapDailyPickVideos(rows, mapCreatorVideoRows, channelIdByCreatorId) {
+  return rows
+    .map((row) => {
+      const mapped = mapCreatorVideoRows([row])[0];
+      if (!mapped) return null;
+      const channelId = channelIdByCreatorId.get(row.creator_id);
+      return {
+        ...mapped,
+        applePodcastId: applePodcastIdForChannel(channelId),
+      };
+    })
+    .filter(Boolean);
 }
 
 async function handleFeaturedPodcastVideos(req, res, supabase, mapCreatorVideoRows) {
   try {
+    if (isDailyPodcastPickRequest(req)) {
+      const { videosByChannelId, channelIdByCreatorId } =
+        await fetchLatestPodcastVideosByChannelId(supabase);
+      const rows = pickDailyFeaturedPodcastVideos(videosByChannelId);
+      return res.json({
+        videos: mapDailyPickVideos(rows, mapCreatorVideoRows, channelIdByCreatorId),
+      });
+    }
+
     const rows = await fetchFeaturedPodcastVideoRows(supabase);
     return res.json({ videos: mapCreatorVideoRows(rows) });
   } catch (err) {
@@ -169,9 +240,12 @@ async function handleFeaturedPodcastVideos(req, res, supabase, mapCreatorVideoRo
 module.exports = {
   PODCAST_CHANNEL_IDS,
   PODCAST_CAROUSEL_SIZE,
+  APPLE_PODCAST_ID_BY_CHANNEL,
   isFeaturedPodcastRequest,
+  isDailyPodcastPickRequest,
   handleFeaturedPodcastVideos,
   fetchFeaturedPodcastVideoRows,
   orderFeaturedPodcastVideos,
+  pickDailyFeaturedPodcastVideos,
   seededShuffle,
 };

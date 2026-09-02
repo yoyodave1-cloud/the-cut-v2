@@ -115,6 +115,8 @@ app.get('/news', registerNewsCreatorFilter(supabase, getNewsPayload));
 
 Returns one most-recent upload per active `type=podcast` creator (no Shorts duration filter), ordered with a deterministic twice-daily shuffle. Creators page featured carousel uses this endpoint.
 
+`GET /creator-videos?featured=podcast&pick=3daily` — same latest-per-creator query, then a day-of-year seeded shuffle (different seed from the carousel) taking the first 3. Home Section 5 featured cards use this. Each item includes `applePodcastId` for iTunes artwork lookup.
+
 ## Creator Content Masterclass
 
 `patches/short-game-videos.js` — `GET /short-game-videos`
