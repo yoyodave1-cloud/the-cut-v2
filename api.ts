@@ -20,6 +20,8 @@ export type VideoItem = {
   publishedAt: string;
   viewCount?: number;
   creator?: { name: string; avatarUrl?: string };
+  /** True for YouTube Shorts; false for full-length. Undefined = treat as Short. */
+  isShort?: boolean;
 };
 
 /** Raw row shape from /top-videos and /top-shorts (snake_case DB fields). */
@@ -129,26 +131,27 @@ export async function fetchTourLatestVideosByCreatorName(
     .slice(0, limit);
 }
 
-function videoMatchesKeyword(video: VideoItem, keyword: string): boolean {
-  const needle = keyword.trim().toLowerCase();
-  if (!needle) return false;
+function videoMatchesKeyword(video: VideoItem, keywords: readonly string[]): boolean {
+  const terms = keywords.map((keyword) => keyword.trim().toLowerCase()).filter(Boolean);
+  if (!terms.length) return false;
   const blob = `${video.title} ${video.summary ?? ''} ${video.creator?.name ?? ''}`.toLowerCase();
-  return blob.includes(needle);
+  return terms.some((term) => blob.includes(term));
 }
 
 /** Scan ranked creator videos for a keyword in title / summary / creator name. */
 export async function fetchVideosMatchingKeyword(
-  keyword: string,
+  keywords: string | readonly string[],
   limit = 8,
 ): Promise<VideoItem[]> {
+  const terms = (Array.isArray(keywords) ? keywords : [keywords]).map(String);
   const matches: VideoItem[] = [];
   const seen = new Set<string>();
-  for (let offset = 0; offset < 150 && matches.length < limit; offset += 50) {
+  for (let offset = 0; offset < 400 && matches.length < limit; offset += 50) {
     const page = await fetchTopVideos(50, offset);
     if (!page.length) break;
     for (const video of page) {
       if (!video.videoId || seen.has(video.videoId)) continue;
-      if (!videoMatchesKeyword(video, keyword)) continue;
+      if (!videoMatchesKeyword(video, terms)) continue;
       seen.add(video.videoId);
       matches.push(video);
       if (matches.length >= limit) break;
@@ -158,23 +161,6 @@ export async function fetchVideosMatchingKeyword(
   return matches.slice(0, limit);
 }
 
-/** One lesson from each short-game / full-swing library topic for the Instructional carousel. */
-export async function fetchInstructionalCarouselVideos(): Promise<VideoItem[]> {
-  const content = await fetchShortGameVideos();
-  const videos: VideoItem[] = [];
-  for (const group of content.mainTopics) {
-    const first = group.subTopics.find((sub) => sub.videos.length > 0)?.videos[0];
-    if (!first) continue;
-    videos.push({
-      videoId: first.youtubeVideoId,
-      title: first.title,
-      publishedAt: '',
-      thumbnailUrl: first.thumbnailUrl,
-      creator: first.channelName ? { name: first.channelName } : undefined,
-    });
-  }
-  return videos;
-}
 
 export type TopCreator = {
   id: string;
@@ -238,6 +224,8 @@ export type CreatorVideoRow = {
   thumbnailUrl: string;
   watchUrl: string;
   creator?: { name: string; avatarUrl?: string };
+  isShort?: boolean;
+  is_short?: boolean;
 };
 
 export async function fetchCreatorVideos(
@@ -268,6 +256,12 @@ function creatorVideoRowToVideoItem(
   creator?: TopCreator,
 ): VideoItem {
   const embeddedCreator = row.creator;
+  const isShort =
+    typeof row.isShort === 'boolean'
+      ? row.isShort
+      : typeof row.is_short === 'boolean'
+        ? row.is_short
+        : undefined;
   return {
     videoId: row.videoId,
     title: row.title,
@@ -279,6 +273,7 @@ function creatorVideoRowToVideoItem(
       : embeddedCreator?.name
         ? { name: embeddedCreator.name, avatarUrl: embeddedCreator.avatarUrl }
         : undefined,
+    ...(typeof isShort === 'boolean' ? { isShort } : {}),
   };
 }
 
@@ -511,6 +506,17 @@ export async function fetchCreatorFeaturedVideos(): Promise<VideoItem[]> {
   return rows.map((row) => creatorVideoRowToVideoItem(row));
 }
 
+/** Home Section 5 carousel — Shorts-first, one item per podcast source. */
+export async function fetchCreatorFeaturedPodcastShorts(): Promise<VideoItem[]> {
+  const res = await fetch(`${API_BASE}/creator-videos?featured=podcast&format=shorts`);
+  if (!res.ok) {
+    throw new Error(`creator-videos featured=podcast format=shorts failed (${res.status})`);
+  }
+  const json = (await res.json()) as { videos?: CreatorVideoRow[] };
+  const rows = Array.isArray(json.videos) ? json.videos : [];
+  return rows.map((row) => creatorVideoRowToVideoItem(row));
+}
+
 export type FeaturedPodcastPick = {
   videoId: string;
   title: string;
@@ -557,6 +563,11 @@ export const MASTERCLASS_MAIN_TOPICS = [
   'Hybrids & Woods',
   'Drivers',
 ] as const;
+
+/** London calendar date that maps to Putting (index 0). */
+const INSTRUCTIONAL_TOPIC_EPOCH = '2026-09-02';
+const INSTRUCTIONAL_DAILY_COUNT = 10;
+const INSTRUCTIONAL_CAROUSEL_COUNT = 7;
 
 export type MasterclassMainTopic = (typeof MASTERCLASS_MAIN_TOPICS)[number];
 
@@ -662,6 +673,122 @@ export async function fetchShortGameVideos(): Promise<MasterclassContent> {
     mainTopics: MASTERCLASS_MAIN_TOPICS.map(
       (mainTopic) => byMainTopic.get(mainTopic) ?? { mainTopic, subTopics: [] },
     ),
+  };
+}
+
+function londonCalendarYmd(now = new Date()): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const value = (type: string) =>
+    Number(parts.find((part) => part.type === type)?.value ?? '');
+  return { year: value('year'), month: value('month'), day: value('day') };
+}
+
+function calendarDaysSinceEpoch(now = new Date()): number {
+  const today = londonCalendarYmd(now);
+  const [epochYear, epochMonth, epochDay] = INSTRUCTIONAL_TOPIC_EPOCH.split('-').map(Number);
+  const todayUtcDays = Date.UTC(today.year, today.month - 1, today.day) / 86_400_000;
+  const epochUtcDays = Date.UTC(epochYear, epochMonth - 1, epochDay) / 86_400_000;
+  return Math.floor(todayUtcDays - epochUtcDays);
+}
+
+export function todaysInstructionalTopic(now = new Date()): MasterclassMainTopic {
+  const dayIndex = calendarDaysSinceEpoch(now);
+  const topicIndex =
+    ((dayIndex % MASTERCLASS_MAIN_TOPICS.length) + MASTERCLASS_MAIN_TOPICS.length) %
+    MASTERCLASS_MAIN_TOPICS.length;
+  return MASTERCLASS_MAIN_TOPICS[topicIndex];
+}
+
+function shortGameVideoToItem(video: ShortGameVideo): VideoItem {
+  return {
+    videoId: video.youtubeVideoId,
+    title: video.title,
+    publishedAt: '',
+    thumbnailUrl: video.thumbnailUrl,
+    creator: video.channelName ? { name: video.channelName } : undefined,
+  };
+}
+
+type InstructionalPick = {
+  video: ShortGameVideo;
+  subTopic: string;
+};
+
+/** Interleaved round-robin across sub-topics, offset by how many times this topic has come around. */
+function selectDailyInstructionalVideos(
+  group: MasterclassMainTopicGroup,
+  dayIndex: number,
+  limit = INSTRUCTIONAL_DAILY_COUNT,
+): InstructionalPick[] {
+  const cycle = Math.floor(Math.max(0, dayIndex) / MASTERCLASS_MAIN_TOPICS.length);
+  const queues = group.subTopics
+    .map((subTopic) => ({
+      topic: subTopic.topic,
+      videos: subTopic.videos.filter((video) => video.youtubeVideoId),
+    }))
+    .filter((queue) => queue.videos.length > 0)
+    .map((queue) => ({
+      ...queue,
+      next: queue.videos.length ? cycle % queue.videos.length : 0,
+    }));
+
+  const picked: InstructionalPick[] = [];
+  const seen = new Set<string>();
+
+  while (picked.length < limit && queues.length) {
+    let progressed = false;
+    for (const queue of queues) {
+      if (picked.length >= limit) break;
+      for (let step = 0; step < queue.videos.length; step += 1) {
+        const index = (queue.next + step) % queue.videos.length;
+        const video = queue.videos[index];
+        if (seen.has(video.youtubeVideoId)) continue;
+        seen.add(video.youtubeVideoId);
+        queue.next = (index + 1) % queue.videos.length;
+        picked.push({ video, subTopic: queue.topic });
+        progressed = true;
+        break;
+      }
+    }
+    if (!progressed) break;
+  }
+
+  return picked;
+}
+
+export type DailyInstructionalFeatured = {
+  video: VideoItem;
+  subTopic: string;
+};
+
+export type DailyInstructionalSelection = {
+  topic: MasterclassMainTopic;
+  carousel: ShortGameVideo[];
+  featured: DailyInstructionalFeatured[];
+};
+
+export async function fetchDailyInstructionalSelection(): Promise<DailyInstructionalSelection> {
+  const content = await fetchShortGameVideos();
+  const dayIndex = calendarDaysSinceEpoch();
+  const topic = todaysInstructionalTopic();
+  const group =
+    content.mainTopics.find((row) => row.mainTopic === topic) ?? {
+      mainTopic: topic,
+      subTopics: [],
+    };
+  const selected = selectDailyInstructionalVideos(group, dayIndex);
+  return {
+    topic,
+    carousel: selected.slice(0, INSTRUCTIONAL_CAROUSEL_COUNT).map((pick) => pick.video),
+    featured: selected.slice(INSTRUCTIONAL_CAROUSEL_COUNT, INSTRUCTIONAL_DAILY_COUNT).map((pick) => ({
+      video: shortGameVideoToItem(pick.video),
+      subTopic: pick.subTopic,
+    })),
   };
 }
 

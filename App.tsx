@@ -1,7 +1,10 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useFonts } from 'expo-font';
-import { Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
+import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
+import { PlayfairDisplay_900Black } from '@expo-google-fonts/playfair-display';
+import { BricolageGrotesque_800ExtraBold } from '@expo-google-fonts/bricolage-grotesque';
+import { RockSalt_400Regular } from '@expo-google-fonts/rock-salt';
 import { PlatformPressable } from '@react-navigation/elements';
 import { NavigationContainer } from '@react-navigation/native';
 import {
@@ -11,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import HomeScreen from './HomeScreen';
+import HomeTabScreen from './screens/HomeTabScreen';
 import CreatorsStackNavigator from './navigation/CreatorsStackNavigator';
 import AcademyStackNavigator from './navigation/AcademyStackNavigator';
 import { colors } from './constants/colors';
@@ -52,7 +56,7 @@ function MainTabs() {
     >
       <Tab.Screen
         name="Home"
-        component={HomeScreen}
+        component={HomeTabScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home-outline" size={size} color={color} />
@@ -60,9 +64,20 @@ function MainTabs() {
         }}
       />
       <Tab.Screen
+        name="Tour"
+        component={HomeScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="golf-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
         name="Creators"
         component={CreatorsStackNavigator}
         options={{
+          title: 'Creator',
+          tabBarLabel: 'Creator',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="camera-outline" size={size} color={color} />
           ),
@@ -82,7 +97,15 @@ function MainTabs() {
 }
 
 export default function App() {
-  const [fontsLoaded] = useFonts({ Inter_600SemiBold, Inter_700Bold });
+  const [fontsLoaded] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+    PlayfairDisplay_900Black,
+    BricolageGrotesque_800ExtraBold,
+    RockSalt_400Regular,
+  });
 
   if (!fontsLoaded) {
     return null;

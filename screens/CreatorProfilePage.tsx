@@ -1,13 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Image,
   Linking,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
-  type DimensionValue,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -15,58 +13,17 @@ import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import CreatorAvatar from '../components/CreatorAvatar';
+import ProfileYoutubeThumb from '../components/ProfileYoutubeThumb';
 import { fetchCreatorVideos, type CreatorVideoRow } from '../api';
 import {
   getCreatorById,
   getCreatorBySupabaseId,
-  youtubeThumbnailUri,
   type CreatorRef,
 } from '../constants/creators';
 import { colors } from '../constants/colors';
 import type { CreatorsStackParamList } from '../navigation/creatorsStackTypes';
 
 const PAD = 16;
-
-function ProfileYoutubeThumb({
-  videoId,
-  imageUrl,
-  width,
-  height,
-  aspectRatio,
-  borderRadius = 0,
-}: {
-  videoId: string;
-  imageUrl?: string;
-  width: DimensionValue;
-  height?: DimensionValue;
-  aspectRatio?: number;
-  borderRadius?: number;
-}) {
-  const [uri, setUri] = useState(() => imageUrl || youtubeThumbnailUri(videoId, 'max'));
-  useEffect(() => {
-    setUri(imageUrl || youtubeThumbnailUri(videoId, 'max'));
-  }, [imageUrl, videoId]);
-  const onError = useCallback(() => {
-    setUri((cur) => {
-      const hq = youtubeThumbnailUri(videoId, 'hq');
-      return cur === hq ? cur : hq;
-    });
-  }, [videoId]);
-  return (
-    <Image
-      source={{ uri }}
-      style={{
-        width,
-        height,
-        aspectRatio,
-        borderRadius,
-        backgroundColor: colors.midNavy,
-      }}
-      resizeMode="cover"
-      onError={onError}
-    />
-  );
-}
 
 function formatRelativeTime(iso: string): string {
   const at = Date.parse(iso);

@@ -14,28 +14,61 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Article,
+  DailyInstructionalSelection,
   FeaturedPodcastPick,
+  ShortGameVideo,
   VideoItem,
-  fetchCreatorFeaturedVideos,
+  fetchCreatorFeaturedPodcastShorts,
   fetchDailyFeaturedPodcastPicks,
-  fetchInstructionalCarouselVideos,
+  fetchDailyInstructionalSelection,
   fetchNewsPage,
   fetchTourLatestVideosByCreatorName,
-  fetchVideosMatchingKeyword,
+  todaysInstructionalTopic,
 } from '../api';
 import { ArticleReaderProvider } from '../ArticleReader';
-import GlowBlob from '../components/GlowBlob';
+import DiagonalFade from '../components/DiagonalFade';
 import TornDivider from '../components/TornDivider';
 import HotRightNowCard from '../components/cards/HotRightNowCard';
 import { NewsCardCompact } from '../components/FeedNewsCards';
 import FeaturedPodcastCard from '../components/FeaturedPodcastCard';
-import { VideoCarousel } from '../components/VideoFeedCards';
+import { MasterclassVideoCard } from '../components/ShortGameMasterclass';
+import {
+  FeaturedVideoCard,
+  PodcastMixedCarousel,
+  VideoCarousel,
+} from '../components/VideoFeedCards';
 import { colors } from '../constants/colors';
+import {
+  PRODUCT_TEST_CAROUSEL_COUNT,
+  PRODUCT_TEST_FEATURED_COUNT,
+  PRODUCT_TEST_VIDEOS,
+  ProductTestVideo,
+} from '../constants/productTestVideos';
 import heroReel from '../assets/gap-video.mp4';
 
 const NEWS_LIMIT = 3;
 const VIDEO_LIMIT = 8;
-const PRODUCT_TEST_KEYWORD = 'testing';
+
+function productTestToMasterclassCard(video: ProductTestVideo, index: number): ShortGameVideo {
+  return {
+    id: video.videoId,
+    youtubeVideoId: video.videoId,
+    title: video.title,
+    channelName: video.channelName,
+    displayOrder: index,
+    thumbnailUrl: video.thumbnailUrl,
+  };
+}
+
+function productTestToVideoItem(video: ProductTestVideo): VideoItem {
+  return {
+    videoId: video.videoId,
+    title: video.title,
+    thumbnailUrl: video.thumbnailUrl,
+    publishedAt: video.publishedAt,
+    creator: { name: video.channelName },
+  };
+}
 
 function PulseDot() {
   const opacity = useRef(new Animated.Value(1)).current;
@@ -91,23 +124,6 @@ function HeroReel() {
   );
 }
 
-function GlowPair({ scheme }: { scheme: 'light' | 'dark' }) {
-  if (scheme === 'light') {
-    return (
-      <>
-        <GlowBlob tone="violet" opacity={0.28} width={320} height={280} style={styles.glowTopLeftLight} />
-        <GlowBlob tone="cyan" opacity={0.28} width={320} height={280} style={styles.glowBottomRightLight} />
-      </>
-    );
-  }
-  return (
-    <>
-      <GlowBlob tone="cyan" opacity={0.5} width={340} height={280} style={styles.glowTopLeftDark} />
-      <GlowBlob tone="violet" opacity={0.42} width={320} height={280} style={styles.glowBottomRightDark} />
-    </>
-  );
-}
-
 function HomeSection({
   scheme,
   last,
@@ -120,7 +136,7 @@ function HomeSection({
   return (
     <View style={[scheme === 'light' ? styles.lightSection : styles.darkSection, last && styles.lastSection]}>
       <View pointerEvents="none" style={styles.glowLayerOnTear}>
-        <GlowPair scheme={scheme} />
+        <DiagonalFade scheme={scheme} />
       </View>
       <View style={styles.sectionInner}>{children}</View>
     </View>
@@ -131,14 +147,7 @@ function IntroSection() {
   return (
     <View style={styles.introSection}>
       <View pointerEvents="none" style={styles.glowLayerOnTear}>
-        <GlowBlob tone="cyan" opacity={0.55} width={340} height={280} style={styles.glowTopLeftDark} />
-        <GlowBlob
-          tone="violet"
-          opacity={0.45}
-          width={320}
-          height={280}
-          style={styles.glowBottomRightDark}
-        />
+        <DiagonalFade scheme="dark" />
       </View>
       <View style={styles.sectionInner}>
         <View style={styles.eyebrowWrap}>
@@ -242,24 +251,49 @@ function CreatorGolfBlock({
   videos,
   articles,
   podcastPicks,
+  featuredVideos,
+  masterclassVideos,
+  topicLabel,
   seeAllLabel,
   onSeeAll,
   last,
+  carousel = 'video',
 }: {
   subtitle: string;
   videos: VideoItem[];
   articles?: Article[];
   podcastPicks?: FeaturedPodcastPick[];
+  featuredVideos?: Array<{ video: VideoItem; subTopic?: string }>;
+  masterclassVideos?: ShortGameVideo[];
+  topicLabel?: string;
   seeAllLabel: string;
   onSeeAll: () => void;
   last?: boolean;
+  carousel?: 'video' | 'shorts';
 }) {
+  const hasMasterclassCarousel = (masterclassVideos?.length ?? 0) > 0;
   return (
     <HomeSection scheme="dark" last={last}>
       <SectionTitle subtitle={subtitle} big="Creator" small="golf" scheme="dark" />
-      {videos.length > 0 ? (
+      {topicLabel || videos.length > 0 || hasMasterclassCarousel ? (
         <View style={styles.carouselWrap}>
-          <VideoCarousel videos={videos} />
+          {topicLabel ? <Text style={styles.instructionalTopic}>{topicLabel}</Text> : null}
+          {hasMasterclassCarousel ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {(masterclassVideos ?? []).map((video) => (
+                <MasterclassVideoCard
+                  key={video.id || video.youtubeVideoId}
+                  video={video}
+                />
+              ))}
+            </ScrollView>
+          ) : videos.length > 0 ? (
+            carousel === 'shorts' ? (
+              <PodcastMixedCarousel videos={videos} />
+            ) : (
+              <VideoCarousel videos={videos} />
+            )
+          ) : null}
         </View>
       ) : null}
       <View style={styles.newsWrap}>
@@ -267,9 +301,17 @@ function CreatorGolfBlock({
           ? podcastPicks.map((pick) => (
               <FeaturedPodcastCard key={pick.videoId || pick.podcastName} pick={pick} />
             ))
-          : (articles ?? []).map((article) => (
-              <NewsCardCompact key={article.url || article.title} article={article} />
-            ))}
+          : featuredVideos
+            ? featuredVideos.map((pick) => (
+                <FeaturedVideoCard
+                  key={pick.video.videoId}
+                  video={pick.video}
+                  subTopic={pick.subTopic}
+                />
+              ))
+            : (articles ?? []).map((article) => (
+                <NewsCardCompact key={article.url || article.title} article={article} />
+              ))}
         <SeeAllLink label={seeAllLabel} scheme="dark" onPress={onSeeAll} />
       </View>
     </HomeSection>
@@ -287,10 +329,15 @@ type HomeFeed = {
   livNews: Article[];
   podcastVideos: VideoItem[];
   podcastPicks: FeaturedPodcastPick[];
-  instructionalVideos: VideoItem[];
-  instructionalNews: Article[];
-  productVideos: VideoItem[];
-  productNews: Article[];
+  instructional: DailyInstructionalSelection;
+  productCarousel: ShortGameVideo[];
+  productFeatured: VideoItem[];
+};
+
+const EMPTY_INSTRUCTIONAL: DailyInstructionalSelection = {
+  topic: todaysInstructionalTopic(),
+  carousel: [],
+  featured: [],
 };
 
 const EMPTY_FEED: HomeFeed = {
@@ -304,10 +351,14 @@ const EMPTY_FEED: HomeFeed = {
   livNews: [],
   podcastVideos: [],
   podcastPicks: [],
-  instructionalVideos: [],
-  instructionalNews: [],
-  productVideos: [],
-  productNews: [],
+  instructional: EMPTY_INSTRUCTIONAL,
+  productCarousel: PRODUCT_TEST_VIDEOS.slice(0, PRODUCT_TEST_CAROUSEL_COUNT).map(
+    productTestToMasterclassCard,
+  ),
+  productFeatured: PRODUCT_TEST_VIDEOS.slice(
+    PRODUCT_TEST_CAROUSEL_COUNT,
+    PRODUCT_TEST_CAROUSEL_COUNT + PRODUCT_TEST_FEATURED_COUNT,
+  ).map(productTestToVideoItem),
 };
 
 function settledList<T>(result: PromiseSettledResult<T[]>, label: string): T[] {
@@ -322,6 +373,12 @@ function settledNews(result: PromiseSettledResult<{ articles: Article[] }>, labe
   return [];
 }
 
+function settledValue<T>(result: PromiseSettledResult<T>, fallback: T, label: string): T {
+  if (result.status === 'fulfilled') return result.value;
+  console.warn(`[The Cut] ${label} failed:`, result.reason);
+  return fallback;
+}
+
 async function loadHomeFeed(): Promise<HomeFeed> {
   const [
     pgaVideos,
@@ -334,10 +391,7 @@ async function loadHomeFeed(): Promise<HomeFeed> {
     livNews,
     podcastVideos,
     podcastPicks,
-    instructionalVideos,
-    instructionalNews,
-    productVideos,
-    productNews,
+    instructional,
   ] = await Promise.allSettled([
     fetchTourLatestVideosByCreatorName('PGA Tour', VIDEO_LIMIT),
     fetchNewsPage({ q: '"PGA Tour"', pageSize: NEWS_LIMIT }),
@@ -350,12 +404,9 @@ async function loadHomeFeed(): Promise<HomeFeed> {
     fetchNewsPage({ q: '"LPGA"', pageSize: NEWS_LIMIT }),
     fetchTourLatestVideosByCreatorName('LIV Golf', VIDEO_LIMIT),
     fetchNewsPage({ q: '"LIV Golf"', pageSize: NEWS_LIMIT }),
-    fetchCreatorFeaturedVideos(),
+    fetchCreatorFeaturedPodcastShorts(),
     fetchDailyFeaturedPodcastPicks(),
-    fetchInstructionalCarouselVideos(),
-    fetchNewsPage({ q: 'golf (instruction OR instructional OR lesson)', pageSize: NEWS_LIMIT }),
-    fetchVideosMatchingKeyword(PRODUCT_TEST_KEYWORD, VIDEO_LIMIT),
-    fetchNewsPage({ q: 'golf testing', pageSize: NEWS_LIMIT }),
+    fetchDailyInstructionalSelection(),
   ]);
 
   return {
@@ -369,10 +420,18 @@ async function loadHomeFeed(): Promise<HomeFeed> {
     livNews: settledNews(livNews, 'LIV Golf news'),
     podcastVideos: settledList(podcastVideos, 'podcast videos'),
     podcastPicks: settledList(podcastPicks, 'podcast featured picks'),
-    instructionalVideos: settledList(instructionalVideos, 'instructional videos'),
-    instructionalNews: settledNews(instructionalNews, 'instructional news'),
-    productVideos: settledList(productVideos, 'product test videos'),
-    productNews: settledNews(productNews, 'product test news'),
+    instructional: settledValue(
+      instructional,
+      { ...EMPTY_INSTRUCTIONAL, topic: todaysInstructionalTopic() },
+      'instructional videos',
+    ),
+    productCarousel: PRODUCT_TEST_VIDEOS.slice(0, PRODUCT_TEST_CAROUSEL_COUNT).map(
+      productTestToMasterclassCard,
+    ),
+    productFeatured: PRODUCT_TEST_VIDEOS.slice(
+      PRODUCT_TEST_CAROUSEL_COUNT,
+      PRODUCT_TEST_CAROUSEL_COUNT + PRODUCT_TEST_FEATURED_COUNT,
+    ).map(productTestToVideoItem),
   };
 }
 
@@ -404,7 +463,7 @@ function HomeTabBody() {
         showsVerticalScrollIndicator={false}
       >
         <IntroSection />
-        <TornDivider fillColor={colors.bg} variant={0} />
+        <TornDivider scheme="light" variant={0} />
 
         <TourGolfBlock
           subtitle="PGA Tour"
@@ -413,7 +472,7 @@ function HomeTabBody() {
           seeAllLabel="See all PGA Tour news →"
           onSeeAll={goTour}
         />
-        <TornDivider fillColor={colors.navy} variant={1} />
+        <TornDivider scheme="dark" variant={1} />
 
         <HomeSection scheme="dark">
           <SectionTitle subtitle="Hot Right Now" big="Creator" small="golf" scheme="dark" />
@@ -422,7 +481,7 @@ function HomeTabBody() {
             <SeeAllLink label="See all trending →" scheme="dark" onPress={goCreators} />
           </View>
         </HomeSection>
-        <TornDivider fillColor={colors.bg} variant={2} />
+        <TornDivider scheme="light" variant={2} />
 
         <TourGolfBlock
           subtitle="DP World Tour"
@@ -431,7 +490,7 @@ function HomeTabBody() {
           seeAllLabel="See all DP World Tour news →"
           onSeeAll={goTour}
         />
-        <TornDivider fillColor={colors.navy} variant={3} />
+        <TornDivider scheme="dark" variant={3} />
 
         <CreatorGolfBlock
           subtitle="Podcasts"
@@ -439,8 +498,9 @@ function HomeTabBody() {
           podcastPicks={feed.podcastPicks}
           seeAllLabel="See all podcasts →"
           onSeeAll={goCreators}
+          carousel="shorts"
         />
-        <TornDivider fillColor={colors.bg} variant={4} />
+        <TornDivider scheme="light" variant={4} />
 
         <TourGolfBlock
           subtitle="LPGA"
@@ -449,16 +509,18 @@ function HomeTabBody() {
           seeAllLabel="See all LPGA news →"
           onSeeAll={goTour}
         />
-        <TornDivider fillColor={colors.navy} variant={5} />
+        <TornDivider scheme="dark" variant={5} />
 
         <CreatorGolfBlock
           subtitle="Instructional"
-          videos={feed.instructionalVideos}
-          articles={feed.instructionalNews}
+          videos={[]}
+          masterclassVideos={feed.instructional.carousel}
+          featuredVideos={feed.instructional.featured}
+          topicLabel={feed.instructional.topic}
           seeAllLabel="See all instruction →"
           onSeeAll={goCreators}
         />
-        <TornDivider fillColor={colors.bg} variant={6} />
+        <TornDivider scheme="light" variant={6} />
 
         <TourGolfBlock
           subtitle="LIV Golf"
@@ -467,12 +529,13 @@ function HomeTabBody() {
           seeAllLabel="See all LIV Golf news →"
           onSeeAll={goTour}
         />
-        <TornDivider fillColor={colors.navy} variant={7} />
+        <TornDivider scheme="dark" variant={7} />
 
         <CreatorGolfBlock
           subtitle="Product Tests"
-          videos={feed.productVideos}
-          articles={feed.productNews}
+          videos={[]}
+          masterclassVideos={feed.productCarousel}
+          featuredVideos={feed.productFeatured.map((video) => ({ video }))}
           seeAllLabel="See all product tests →"
           onSeeAll={goCreators}
           last
@@ -532,16 +595,10 @@ const styles = StyleSheet.create({
   lastSection: { paddingBottom: 56 },
   glowLayerOnTear: {
     ...StyleSheet.absoluteFillObject,
-    top: -34,
-    bottom: -34,
     overflow: 'hidden',
     zIndex: 3,
   },
   sectionInner: { position: 'relative', zIndex: 4, overflow: 'visible' },
-  glowTopLeftDark: { left: -100, top: -60 },
-  glowBottomRightDark: { right: -110, bottom: -80 },
-  glowTopLeftLight: { left: -100, top: -70 },
-  glowBottomRightLight: { right: -100, bottom: -80 },
   eyebrowWrap: { alignItems: 'center' },
   eyebrow: {
     flexDirection: 'row',
@@ -647,6 +704,14 @@ const styles = StyleSheet.create({
   },
   sectionTitleSmallLight: { color: colors.navy },
   carouselWrap: { marginTop: 22 },
+  instructionalTopic: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    letterSpacing: 0.96,
+    textTransform: 'uppercase',
+    color: '#9EEFFB',
+    marginBottom: 10,
+  },
   newsWrap: { marginTop: 22 },
   seeAllLight: {
     fontFamily: 'Inter_600SemiBold',

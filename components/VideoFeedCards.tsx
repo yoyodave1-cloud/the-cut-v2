@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Image,
   ScrollView,
@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import {
   VideoItem,
   logImageError,
@@ -16,9 +17,14 @@ import {
   videoThumbnailUri,
 } from '../api';
 import { colors } from '../constants/colors';
+import { youtubeOar2Uri } from '../constants/creators';
+import ProfileYoutubeThumb from './ProfileYoutubeThumb';
 
 export function formatVideoTimeAgo(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
+  if (!iso) return '';
+  const at = new Date(iso).getTime();
+  if (Number.isNaN(at)) return '';
+  const diff = Date.now() - at;
   const hrs = Math.floor(diff / (1000 * 60 * 60));
   if (hrs < 1) return 'just now';
   if (hrs < 24) return `${hrs}h ago`;
@@ -26,8 +32,20 @@ export function formatVideoTimeAgo(iso: string) {
   return `${days}d ago`;
 }
 
-export function FeaturedVideoCard({ video, tag }: { video: VideoItem; tag?: string }) {
+export function FeaturedVideoCard({
+  video,
+  tag,
+  subTopic,
+}: {
+  video: VideoItem;
+  tag?: string;
+  subTopic?: string;
+}) {
   const thumb = videoThumbnailUri(video);
+  const hasPublishedAt = Boolean(String(video.publishedAt ?? '').trim());
+  const metaDetail = hasPublishedAt
+    ? formatVideoTimeAgo(video.publishedAt)
+    : (subTopic ?? '').trim();
   return (
     <TouchableOpacity
       style={styles.featuredVideoCard}
@@ -51,7 +69,7 @@ export function FeaturedVideoCard({ video, tag }: { video: VideoItem; tag?: stri
           {video.title}
         </Text>
         <Text style={styles.cardMeta}>
-          {video.creator?.name || 'Creator'} · {formatVideoTimeAgo(video.publishedAt)}
+          {video.creator?.name || 'Creator'} · {metaDetail}
         </Text>
       </View>
     </TouchableOpacity>
@@ -64,29 +82,54 @@ export function ShortsCarousel({
   title,
 }: {
   shorts: VideoItem[];
-  tag: string;
-  title: string;
+  tag?: string;
+  title?: string;
 }) {
   if (!shorts.length) return null;
+  const showHeader = Boolean(tag || title);
   return (
-    <View style={{ marginBottom: 14 }}>
-      <Text style={styles.tagLabel}>{tag}</Text>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4 }}>
+    <View style={{ marginBottom: showHeader ? 14 : 0 }}>
+      {tag ? <Text style={styles.tagLabel}>{tag}</Text> : null}
+      {title ? <Text style={styles.sectionTitle}>{title}</Text> : null}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{ marginTop: showHeader ? 4 : 0 }}
+      >
         {shorts.map((s) => {
           const thumb = videoThumbnailUri(s);
+          const fadeId = `shortCaptionFade-${s.videoId}`;
           return (
             <TouchableOpacity
               key={s.videoId}
               style={styles.shortCard}
               activeOpacity={0.8}
-              onPress={() => openYouTubeShort(s.videoId)}
+              onPress={() =>
+                s.isShort === false
+                  ? openYouTubeVideo(s.videoId)
+                  : openYouTubeShort(s.videoId)
+              }
             >
               <Image
                 source={{ uri: thumb }}
                 style={styles.shortThumb}
+                resizeMode="cover"
                 onError={logImageError('short-carousel', thumb)}
               />
+              <Svg
+                width={180}
+                height={320}
+                style={styles.shortGradient}
+                pointerEvents="none"
+              >
+                <Defs>
+                  <LinearGradient id={fadeId} x1="0" y1="0" x2="0" y2="1">
+                    <Stop offset="0.45" stopColor="#000000" stopOpacity="0" />
+                    <Stop offset="1" stopColor="#000000" stopOpacity="0.72" />
+                  </LinearGradient>
+                </Defs>
+                <Rect width="180" height="320" fill={`url(#${fadeId})`} />
+              </Svg>
               <View style={styles.shortCaptionWrap}>
                 <Text style={styles.shortCaption} numberOfLines={2}>
                   {s.title}
@@ -139,17 +182,18 @@ export function VideoCarousel({
   subtitle,
 }: {
   videos: VideoItem[];
-  tag: string;
-  title: string;
-  subtitle: string;
+  tag?: string;
+  title?: string;
+  subtitle?: string;
 }) {
   if (!videos.length) return null;
+  const showHeader = Boolean(tag || title || subtitle);
   return (
-    <View style={{ marginBottom: 18 }}>
-      <Text style={styles.scaledTagLabel}>{tag}</Text>
-      <Text style={styles.sectionTitleScaled}>{title}</Text>
-      <Text style={styles.sectionSubtitleScaled}>{subtitle}</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 5 }}>
+    <View style={{ marginBottom: showHeader ? 18 : 0 }}>
+      {tag ? <Text style={styles.scaledTagLabel}>{tag}</Text> : null}
+      {title ? <Text style={styles.sectionTitleScaled}>{title}</Text> : null}
+      {subtitle ? <Text style={styles.sectionSubtitleScaled}>{subtitle}</Text> : null}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: showHeader ? 5 : 0 }}>
         {videos.map((v) => {
           const thumb = videoThumbnailUri(v);
           return (
@@ -168,7 +212,9 @@ export function VideoCarousel({
                 {v.title}
               </Text>
               <Text style={styles.carouselMeta}>
-                {v.creator?.name || 'Creator'} · {formatVideoTimeAgo(v.publishedAt)}
+                {[v.creator?.name || 'Creator', formatVideoTimeAgo(v.publishedAt)]
+                  .filter(Boolean)
+                  .join(' · ')}
               </Text>
             </TouchableOpacity>
           );
@@ -232,8 +278,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  shortCard: { width: 180, marginRight: 8 },
-  shortThumb: { width: 180, height: 320, borderRadius: 10, backgroundColor: colors.midNavy },
+  shortCard: { width: 180, height: 320, marginRight: 8, borderRadius: 10, overflow: 'hidden' },
+  shortThumb: { width: 180, height: 320, backgroundColor: colors.midNavy },
+  shortGradient: { position: 'absolute', top: 0, left: 0 },
   shortCaptionWrap: { position: 'absolute', bottom: 8, left: 8, right: 8 },
   shortCaption: { color: '#FFFFFF', fontSize: 11, fontWeight: '600', lineHeight: 14 },
   fullBleedWrap: {
@@ -277,4 +324,116 @@ const styles = StyleSheet.create({
   carouselThumb: { width: 240, height: 135, borderRadius: 15, backgroundColor: colors.midNavy },
   carouselTitle: { fontSize: 17, fontWeight: '600', color: colors.navy, marginTop: 10, lineHeight: 23 },
   carouselMeta: { fontSize: 15, color: colors.coolGrey, marginTop: 4 },
+});
+
+const PODCAST_MIXED_HEIGHT = 240;
+const PODCAST_SHORT_WIDTH = Math.round((PODCAST_MIXED_HEIGHT * 9) / 16);
+const PODCAST_VIDEO_WIDTH = Math.round((PODCAST_MIXED_HEIGHT * 16) / 9);
+
+const oar2PortraitCache = new Map<string, boolean>();
+
+/** True when YouTube has a vertical oar2 still (real Short). False = landscape episode art. */
+function useOar2IsPortrait(videoId: string): boolean | null {
+  const [portrait, setPortrait] = useState<boolean | null>(() =>
+    oar2PortraitCache.has(videoId) ? oar2PortraitCache.get(videoId)! : null,
+  );
+
+  useEffect(() => {
+    if (oar2PortraitCache.has(videoId)) {
+      setPortrait(oar2PortraitCache.get(videoId)!);
+      return;
+    }
+    let cancelled = false;
+    Image.getSize(
+      youtubeOar2Uri(videoId),
+      (width, height) => {
+        const isPortrait = height > width && width >= 200 && height >= 200;
+        oar2PortraitCache.set(videoId, isPortrait);
+        if (!cancelled) setPortrait(isPortrait);
+      },
+      () => {
+        oar2PortraitCache.set(videoId, false);
+        if (!cancelled) setPortrait(false);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [videoId]);
+
+  return portrait;
+}
+
+function PodcastMixedItem({ item }: { item: VideoItem }) {
+  const portrait = useOar2IsPortrait(item.videoId);
+  const isShortCard = portrait === true || (portrait === null && item.isShort === true);
+
+  if (isShortCard) {
+    return (
+      <TouchableOpacity
+        style={mixedStyles.shortCard}
+        activeOpacity={0.8}
+        onPress={() => openYouTubeShort(item.videoId)}
+      >
+        <View style={mixedStyles.shortThumbBox}>
+          <ProfileYoutubeThumb
+            videoId={item.videoId}
+            imageUrl={youtubeOar2Uri(item.videoId)}
+            width={PODCAST_SHORT_WIDTH}
+            height={PODCAST_MIXED_HEIGHT}
+            borderRadius={8}
+          />
+        </View>
+      </TouchableOpacity>
+    );
+  }
+
+  const thumb = videoThumbnailUri(item);
+  return (
+    <TouchableOpacity
+      style={mixedStyles.videoCard}
+      activeOpacity={0.8}
+      onPress={() => openYouTubeVideo(item.videoId)}
+    >
+      <Image
+        source={{ uri: thumb }}
+        style={mixedStyles.videoThumb}
+        resizeMode="cover"
+        onError={logImageError('podcast-mixed-video', thumb)}
+      />
+    </TouchableOpacity>
+  );
+}
+
+export function PodcastMixedCarousel({ videos }: { videos: VideoItem[] }) {
+  if (!videos.length) return null;
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      {videos.map((item) => (
+        <PodcastMixedItem key={item.videoId} item={item} />
+      ))}
+    </ScrollView>
+  );
+}
+
+const mixedStyles = StyleSheet.create({
+  shortCard: { width: PODCAST_SHORT_WIDTH, height: PODCAST_MIXED_HEIGHT, marginRight: 8 },
+  shortThumbBox: {
+    width: PODCAST_SHORT_WIDTH,
+    height: PODCAST_MIXED_HEIGHT,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  videoCard: {
+    width: PODCAST_VIDEO_WIDTH,
+    height: PODCAST_MIXED_HEIGHT,
+    marginRight: 8,
+    overflow: 'hidden',
+  },
+  videoThumb: {
+    width: PODCAST_VIDEO_WIDTH,
+    height: PODCAST_MIXED_HEIGHT,
+    borderRadius: 15,
+    backgroundColor: colors.midNavy,
+  },
 });

@@ -1,8 +1,12 @@
 /**
  * Featured podcast carousel for GET /creator-videos?featured=podcast
  *
- * Returns one most-recent upload per active podcast creator (no Shorts duration
- * filter), ordered with a deterministic twice-daily shuffle.
+ * Default / pick=3daily: one most-recent upload per active podcast creator
+ * (no Shorts duration filter), ordered with a deterministic twice-daily shuffle.
+ *
+ * format=shorts: one item per canonical source — latest Short if they have one,
+ * otherwise latest full-length video. Same twice-daily order as the default
+ * carousel. Each item is tagged with isShort / is_short for client URL routing.
  *
  * Integration (the-cut/backend/server.js):
  *   const {
@@ -100,17 +104,6 @@ function orderFeaturedPodcastVideos(videosByChannelId, now = new Date()) {
   return seededShuffle(available, seed);
 }
 
-function latestVideoPerCreator(rows) {
-  const byCreatorId = new Map();
-  for (const row of rows) {
-    if (!row?.creator_id || !row?.video_id) continue;
-    if (!byCreatorId.has(row.creator_id)) {
-      byCreatorId.set(row.creator_id, row);
-    }
-  }
-  return byCreatorId;
-}
-
 function localDayOfYear(now) {
   const start = new Date(now.getFullYear(), 0, 1);
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -136,6 +129,13 @@ function isDailyPodcastPickRequest(req) {
   );
 }
 
+function isPodcastShortsFormatRequest(req) {
+  return (
+    isFeaturedPodcastRequest(req) &&
+    firstQueryValue(req.query.format).toLowerCase() === "shorts"
+  );
+}
+
 /** Apple Podcasts collection IDs keyed by YouTube channel_id (artwork via iTunes Lookup). */
 const APPLE_PODCAST_ID_BY_CHANNEL = {
   "UCZNEuuyLZQt5H9lUqImc0CQ": "1406443091",
@@ -152,7 +152,23 @@ function applePodcastIdForChannel(channelId) {
   return APPLE_PODCAST_ID_BY_CHANNEL[String(channelId || "").trim()] || "";
 }
 
-async function fetchLatestPodcastVideosByChannelId(supabase) {
+function latestVideoPerCreator(rows) {
+  const byCreatorId = new Map();
+  for (const row of rows) {
+    if (!row?.creator_id || !row?.video_id) continue;
+    if (!byCreatorId.has(row.creator_id)) {
+      byCreatorId.set(row.creator_id, row);
+    }
+  }
+  return byCreatorId;
+}
+
+const PODCAST_VIDEO_SELECT =
+  "video_id,title,summary,published_at,is_short,creator_id,creators(id,name,handle,avatar_url,type)";
+
+async function fetchLatestPodcastVideosByChannelId(supabase, options = {}) {
+  const shortsOnly = options.shortsOnly === true;
+
   const { data: creators, error: creatorsError } = await supabase
     .from("creators")
     .select("id, channel_id")
@@ -173,13 +189,19 @@ async function fetchLatestPodcastVideosByChannelId(supabase) {
     podcastCreators.map((row) => [row.id, row.channel_id]),
   );
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("creator_videos")
-    .select(
-      "video_id,title,summary,published_at,creator_id,creators(id,name,handle,avatar_url,type)",
-    )
-    .in("creator_id", creatorIds)
-    .order("published_at", { ascending: false, nullsFirst: false });
+    .select(PODCAST_VIDEO_SELECT)
+    .in("creator_id", creatorIds);
+
+  if (shortsOnly) {
+    query = query.eq("is_short", true);
+  }
+
+  const { data, error } = await query.order("published_at", {
+    ascending: false,
+    nullsFirst: false,
+  });
 
   if (error) {
     throw error;
@@ -195,6 +217,27 @@ async function fetchLatestPodcastVideosByChannelId(supabase) {
   }
 
   return { videosByChannelId, channelIdByCreatorId };
+}
+
+/** Latest Short per source, else latest upload of any length. */
+async function fetchShortsPreferredPodcastVideosByChannelId(supabase) {
+  const [shortsResult, anyResult] = await Promise.all([
+    fetchLatestPodcastVideosByChannelId(supabase, { shortsOnly: true }),
+    fetchLatestPodcastVideosByChannelId(supabase),
+  ]);
+
+  const videosByChannelId = new Map();
+  for (const channelId of PODCAST_CHANNEL_IDS) {
+    const row =
+      shortsResult.videosByChannelId.get(channelId) ||
+      anyResult.videosByChannelId.get(channelId);
+    if (row) videosByChannelId.set(channelId, row);
+  }
+
+  return {
+    videosByChannelId,
+    channelIdByCreatorId: anyResult.channelIdByCreatorId,
+  };
 }
 
 async function fetchFeaturedPodcastVideoRows(supabase) {
@@ -216,6 +259,21 @@ function mapDailyPickVideos(rows, mapCreatorVideoRows, channelIdByCreatorId) {
     .filter(Boolean);
 }
 
+function mapShortsPreferredVideos(rows, mapCreatorVideoRows) {
+  return rows
+    .map((row) => {
+      const mapped = mapCreatorVideoRows([row])[0];
+      if (!mapped) return null;
+      const isShort = row.is_short === true;
+      return {
+        ...mapped,
+        isShort,
+        is_short: isShort,
+      };
+    })
+    .filter(Boolean);
+}
+
 async function handleFeaturedPodcastVideos(req, res, supabase, mapCreatorVideoRows) {
   try {
     if (isDailyPodcastPickRequest(req)) {
@@ -225,6 +283,14 @@ async function handleFeaturedPodcastVideos(req, res, supabase, mapCreatorVideoRo
       return res.json({
         videos: mapDailyPickVideos(rows, mapCreatorVideoRows, channelIdByCreatorId),
       });
+    }
+
+    if (isPodcastShortsFormatRequest(req)) {
+      const { videosByChannelId } = await fetchShortsPreferredPodcastVideosByChannelId(
+        supabase,
+      );
+      const rows = orderFeaturedPodcastVideos(videosByChannelId);
+      return res.json({ videos: mapShortsPreferredVideos(rows, mapCreatorVideoRows) });
     }
 
     const rows = await fetchFeaturedPodcastVideoRows(supabase);
@@ -243,8 +309,10 @@ module.exports = {
   APPLE_PODCAST_ID_BY_CHANNEL,
   isFeaturedPodcastRequest,
   isDailyPodcastPickRequest,
+  isPodcastShortsFormatRequest,
   handleFeaturedPodcastVideos,
   fetchFeaturedPodcastVideoRows,
+  fetchShortsPreferredPodcastVideosByChannelId,
   orderFeaturedPodcastVideos,
   pickDailyFeaturedPodcastVideos,
   seededShuffle,

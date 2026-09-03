@@ -22,6 +22,13 @@ const ROW_DIVIDER = '#E5E9EE';
 const COLLAPSED_ROW_COUNT = 3;
 const ROW_GAP = 34;
 
+type HotRightNowCardProps = {
+  maxItems?: number;
+  expandable?: boolean;
+  showHeader?: boolean;
+  showFooter?: boolean;
+};
+
 function formatMetaStat(video: HotRightNowVideo): string {
   if (video.velocityPerHour != null && Number.isFinite(video.velocityPerHour)) {
     return formatVelocityPerHour(video.velocityPerHour);
@@ -49,7 +56,12 @@ function SkeletonRows() {
   );
 }
 
-export default function HotRightNowCard() {
+export default function HotRightNowCard({
+  maxItems = 10,
+  expandable = true,
+  showHeader = true,
+  showFooter = true,
+}: HotRightNowCardProps) {
   const openVideo = useOpenArticle();
   const [videos, setVideos] = useState<HotRightNowVideo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,26 +87,31 @@ export default function HotRightNowCard() {
 
   if (!loading && videos.length === 0) return null;
 
-  const canExpand = videos.length > COLLAPSED_ROW_COUNT;
-  const visibleVideos = expanded ? videos : videos.slice(0, COLLAPSED_ROW_COUNT);
+  const capped = videos.slice(0, maxItems);
+  const canExpand = expandable && capped.length > COLLAPSED_ROW_COUNT;
+  const visibleVideos = expanded || !expandable ? capped : capped.slice(0, COLLAPSED_ROW_COUNT);
 
   return (
     <View style={styles.card}>
-      <View style={styles.accentBar} />
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={styles.titleRow}>
-            <Ionicons name="flame" size={20} color={ACCENT} style={styles.flameIcon} />
-            <Text style={styles.title}>Hot Right Now</Text>
+      {showHeader ? (
+        <>
+          <View style={styles.accentBar} />
+          <View style={styles.header}>
+            <View style={styles.headerLeft}>
+              <View style={styles.titleRow}>
+                <Ionicons name="flame" size={20} color={ACCENT} style={styles.flameIcon} />
+                <Text style={styles.title}>Hot Right Now</Text>
+              </View>
+              <Text style={styles.subtitle}>Trending across creator golf</Text>
+            </View>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>TOP 10</Text>
+            </View>
           </View>
-          <Text style={styles.subtitle}>Trending across creator golf</Text>
-        </View>
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>TOP 10</Text>
-        </View>
-      </View>
+        </>
+      ) : null}
 
-      <View style={styles.rowsSection}>
+      <View style={[styles.rowsSection, !showHeader && styles.rowsSectionCompact]}>
         {loading ? (
           <SkeletonRows />
         ) : (
@@ -146,23 +163,25 @@ export default function HotRightNowCard() {
         )}
       </View>
 
-      <View style={styles.footer}>
-        <Text style={styles.footerLeft}>Updated every 6 hours</Text>
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={() => {
-            if (expanded) {
-              setExpanded(false);
-            } else if (canExpand) {
-              setExpanded(true);
-            }
-          }}
-        >
-          <Text style={styles.footerRight}>
-            {expanded ? 'Show less' : 'All trending ›'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      {showFooter ? (
+        <View style={styles.footer}>
+          <Text style={styles.footerLeft}>Updated every 6 hours</Text>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => {
+              if (expanded) {
+                setExpanded(false);
+              } else if (canExpand) {
+                setExpanded(true);
+              }
+            }}
+          >
+            <Text style={styles.footerRight}>
+              {expanded ? 'Show less' : 'All trending ›'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -190,6 +209,9 @@ const styles = StyleSheet.create({
   },
   rowsSection: {
     marginTop: ROW_GAP,
+  },
+  rowsSectionCompact: {
+    marginTop: 0,
   },
   headerLeft: {
     flex: 1,

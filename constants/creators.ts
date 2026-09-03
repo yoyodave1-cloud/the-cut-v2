@@ -71,6 +71,11 @@ export function youtubeThumbnailUri(videoId: string, quality: 'max' | 'hq'): str
   return `https://img.youtube.com/vi/${videoId}/${slug}.jpg`;
 }
 
+/** Vertical (original-aspect) still YouTube only serves for real Shorts. */
+export function youtubeOar2Uri(videoId: string): string {
+  return `https://i.ytimg.com/vi/${videoId}/oar2.jpg`;
+}
+
 export function getCreatorById(id: string): CreatorRef | undefined {
   return CREATORS.find((c) => c.id === id);
 }

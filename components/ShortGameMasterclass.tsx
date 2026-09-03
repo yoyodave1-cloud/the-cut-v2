@@ -43,7 +43,7 @@ function thumbnailUri(video: ShortGameVideo) {
   );
 }
 
-function MasterclassVideoCard({ video }: { video: ShortGameVideo }) {
+export function MasterclassVideoCard({ video }: { video: ShortGameVideo }) {
   const thumb = thumbnailUri(video);
   return (
     <TouchableOpacity
