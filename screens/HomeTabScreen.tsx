@@ -2,14 +2,16 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
+  LayoutChangeEvent,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { StatusBar } from 'expo-status-bar';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -26,7 +28,9 @@ import {
   todaysInstructionalTopic,
 } from '../api';
 import { ArticleReaderProvider } from '../ArticleReader';
+import HomeHeader from '../components/HomeHeader';
 import SectionGlow from '../components/SectionGlow';
+import SectionTitle from '../components/SectionTitle';
 import TornDivider from '../components/TornDivider';
 import HotRightNowCard from '../components/cards/HotRightNowCard';
 import { NewsCardCompact } from '../components/FeedNewsCards';
@@ -97,16 +101,6 @@ function PulseDot() {
   return <Animated.View style={[styles.eyebrowDot, { opacity }]} />;
 }
 
-function BrandHeader({ topInset }: { topInset: number }) {
-  return (
-    <View style={[styles.navbar, { paddingTop: topInset + 14 }]}>
-      <Text style={styles.mark}>
-        THE <Text style={styles.markAccent}>CUT</Text>
-      </Text>
-    </View>
-  );
-}
-
 function HeroReel() {
   const player = useVideoPlayer(heroReel, (p) => {
     p.loop = true;
@@ -124,78 +118,118 @@ function HeroReel() {
   );
 }
 
+const TORN_DIVIDER_H = 34;
+
+function SectionShell({
+  scheme,
+  style,
+  tornVariant,
+  children,
+}: {
+  scheme: 'light' | 'dark';
+  style: StyleProp<ViewStyle>;
+  tornVariant?: number;
+  children: React.ReactNode;
+}) {
+  const [size, setSize] = useState({ width: 0, height: 0 });
+
+  const takeLayout = (width: number, height: number, prefer: boolean) => {
+    if (width <= 0 || height <= 0) return;
+    setSize((prev) => {
+      if (!prefer && prev.height > 0) return prev;
+      if (prev.width === width && prev.height === height) return prev;
+      return { width, height };
+    });
+  };
+
+  const glowH = Math.max(0, size.height - TORN_DIVIDER_H);
+
+  return (
+    <View
+      collapsable={false}
+      style={style}
+      onLayout={({ nativeEvent }: LayoutChangeEvent) =>
+        takeLayout(nativeEvent.layout.width, nativeEvent.layout.height, true)
+      }
+    >
+      {tornVariant != null ? (
+        <View style={styles.tornBleed}>
+          <TornDivider
+            scheme={scheme}
+            variant={tornVariant}
+            sectionWidth={size.width}
+            sectionHeight={size.height}
+          />
+        </View>
+      ) : null}
+      {glowH > 0 ? (
+        <View
+          pointerEvents="none"
+          collapsable={false}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: size.width,
+            height: glowH,
+            overflow: 'hidden',
+          }}
+        >
+          <SectionGlow scheme={scheme} width={size.width} height={glowH} />
+        </View>
+      ) : null}
+      <View
+        style={styles.sectionInner}
+        onLayout={({ nativeEvent }: LayoutChangeEvent) =>
+          takeLayout(nativeEvent.layout.width, nativeEvent.layout.height, false)
+        }
+      >
+        {children}
+      </View>
+    </View>
+  );
+}
+
 function HomeSection({
   scheme,
   last,
+  tornVariant,
   children,
 }: {
   scheme: 'light' | 'dark';
   last?: boolean;
+  tornVariant?: number;
   children: React.ReactNode;
 }) {
   return (
-    <View style={[scheme === 'light' ? styles.lightSection : styles.darkSection, last && styles.lastSection]}>
-      <View pointerEvents="none" style={styles.glowLayerOnTear}>
-        <SectionGlow scheme={scheme} />
-      </View>
-      <View style={styles.sectionInner}>{children}</View>
-    </View>
+    <SectionShell
+      scheme={scheme}
+      tornVariant={tornVariant}
+      style={[scheme === 'light' ? styles.lightSection : styles.darkSection, last && styles.lastSection]}
+    >
+      {children}
+    </SectionShell>
   );
 }
 
 function IntroSection() {
   return (
-    <View style={styles.introSection}>
-      <View pointerEvents="none" style={styles.glowLayerOnTear}>
-        <SectionGlow scheme="dark" />
-      </View>
-      <View style={styles.sectionInner}>
-        <View style={styles.eyebrowWrap}>
-          <View style={styles.eyebrow}>
-            <PulseDot />
-            <Text style={styles.eyebrowText}>Welcome to The Cut</Text>
-          </View>
-        </View>
-        <Text style={styles.oversize}>{`Sunday golf,\nMonday golf,\none app.`}</Text>
-        <Text style={styles.rockSaltAccent}>Tour Vs Creator</Text>
-        <View style={styles.videoBox}>
-          <HeroReel />
-          <Text style={styles.videoCaption}>
-            Golf media picked a side, the fans never did. One app for all golf.
-          </Text>
+    <SectionShell scheme="dark" style={styles.introSection}>
+      <View style={styles.eyebrowWrap}>
+        <View style={styles.eyebrow}>
+          <PulseDot />
+          <Text style={styles.eyebrowText}>Welcome to The Cut</Text>
         </View>
       </View>
-    </View>
-  );
-}
-
-function SectionTitle({
-  subtitle,
-  big,
-  small,
-  scheme,
-}: {
-  subtitle: string;
-  big: string;
-  small: string;
-  scheme: 'light' | 'dark';
-}) {
-  return (
-    <View>
-      <Text style={[styles.sectionSubtitle, scheme === 'light' && styles.sectionSubtitleLight]}>
-        {subtitle}
-      </Text>
-      <View style={styles.sectionTitleRow}>
-        <View collapsable={false} style={styles.sectionTitleBigWrap}>
-          <Text style={[styles.sectionTitleBig, scheme === 'light' && styles.sectionTitleBigLight]}>
-            {big}
-          </Text>
-        </View>
-        <Text style={[styles.sectionTitleSmall, scheme === 'light' && styles.sectionTitleSmallLight]}>
-          {small}
+      <Text style={styles.oversize}>{`Sunday golf,\nMonday golf,\none app.`}</Text>
+      <Text style={styles.rockSaltAccent}>Tour Vs Creator</Text>
+      <View style={styles.videoBox}>
+        <HeroReel />
+        <Text style={styles.videoCaption}>
+          Golf media picked a side, the fans never did. One app for all golf.
         </Text>
       </View>
-    </View>
+    </SectionShell>
   );
 }
 
@@ -221,15 +255,17 @@ function TourGolfBlock({
   articles,
   seeAllLabel,
   onSeeAll,
+  tornVariant,
 }: {
   subtitle: string;
   videos: VideoItem[];
   articles: Article[];
   seeAllLabel: string;
   onSeeAll: () => void;
+  tornVariant: number;
 }) {
   return (
-    <HomeSection scheme="light">
+    <HomeSection scheme="light" tornVariant={tornVariant}>
       <SectionTitle subtitle={subtitle} big="Tour" small="golf" scheme="light" />
       {videos.length > 0 ? (
         <View style={styles.carouselWrap}>
@@ -258,6 +294,7 @@ function CreatorGolfBlock({
   onSeeAll,
   last,
   carousel = 'video',
+  tornVariant,
 }: {
   subtitle: string;
   videos: VideoItem[];
@@ -270,10 +307,11 @@ function CreatorGolfBlock({
   onSeeAll: () => void;
   last?: boolean;
   carousel?: 'video' | 'shorts';
+  tornVariant: number;
 }) {
   const hasMasterclassCarousel = (masterclassVideos?.length ?? 0) > 0;
   return (
-    <HomeSection scheme="dark" last={last}>
+    <HomeSection scheme="dark" last={last} tornVariant={tornVariant}>
       <SectionTitle subtitle={subtitle} big="Creator" small="golf" scheme="dark" />
       {topicLabel || videos.length > 0 || hasMasterclassCarousel ? (
         <View style={styles.carouselWrap}>
@@ -455,15 +493,13 @@ function HomeTabBody() {
 
   return (
     <View style={styles.root}>
-      <StatusBar style="light" />
-      <BrandHeader topInset={insets.top} />
+      <HomeHeader />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={{ paddingBottom: insets.bottom + 8 }}
         showsVerticalScrollIndicator={false}
       >
         <IntroSection />
-        <TornDivider scheme="light" variant={0} />
 
         <TourGolfBlock
           subtitle="PGA Tour"
@@ -471,17 +507,16 @@ function HomeTabBody() {
           articles={feed.pgaNews}
           seeAllLabel="See all PGA Tour news →"
           onSeeAll={goTour}
+          tornVariant={0}
         />
-        <TornDivider scheme="dark" variant={1} />
 
-        <HomeSection scheme="dark">
+        <HomeSection scheme="dark" tornVariant={1}>
           <SectionTitle subtitle="Hot Right Now" big="Creator" small="golf" scheme="dark" />
           <View style={styles.newsWrap}>
             <HotRightNowCard maxItems={5} expandable={false} showHeader={false} showFooter={false} />
             <SeeAllLink label="See all trending →" scheme="dark" onPress={goCreators} />
           </View>
         </HomeSection>
-        <TornDivider scheme="light" variant={2} />
 
         <TourGolfBlock
           subtitle="DP World Tour"
@@ -489,8 +524,8 @@ function HomeTabBody() {
           articles={feed.dpwtNews}
           seeAllLabel="See all DP World Tour news →"
           onSeeAll={goTour}
+          tornVariant={2}
         />
-        <TornDivider scheme="dark" variant={3} />
 
         <CreatorGolfBlock
           subtitle="Podcasts"
@@ -499,8 +534,8 @@ function HomeTabBody() {
           seeAllLabel="See all podcasts →"
           onSeeAll={goCreators}
           carousel="shorts"
+          tornVariant={3}
         />
-        <TornDivider scheme="light" variant={4} />
 
         <TourGolfBlock
           subtitle="LPGA"
@@ -508,8 +543,8 @@ function HomeTabBody() {
           articles={feed.lpgaNews}
           seeAllLabel="See all LPGA news →"
           onSeeAll={goTour}
+          tornVariant={4}
         />
-        <TornDivider scheme="dark" variant={5} />
 
         <CreatorGolfBlock
           subtitle="Instructional"
@@ -519,8 +554,8 @@ function HomeTabBody() {
           topicLabel={feed.instructional.topic}
           seeAllLabel="See all instruction →"
           onSeeAll={goCreators}
+          tornVariant={5}
         />
-        <TornDivider scheme="light" variant={6} />
 
         <TourGolfBlock
           subtitle="LIV Golf"
@@ -528,8 +563,8 @@ function HomeTabBody() {
           articles={feed.livNews}
           seeAllLabel="See all LIV Golf news →"
           onSeeAll={goTour}
+          tornVariant={6}
         />
-        <TornDivider scheme="dark" variant={7} />
 
         <CreatorGolfBlock
           subtitle="Product Tests"
@@ -539,6 +574,7 @@ function HomeTabBody() {
           seeAllLabel="See all product tests →"
           onSeeAll={goCreators}
           last
+          tornVariant={7}
         />
       </ScrollView>
     </View>
@@ -556,21 +592,6 @@ export default function HomeTabScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.navy },
   scroll: { flex: 1 },
-  navbar: {
-    zIndex: 20,
-    backgroundColor: 'rgba(11,22,41,0.85)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(138,155,176,0.16)',
-    paddingHorizontal: 20,
-    paddingBottom: 14,
-  },
-  mark: {
-    fontFamily: 'BricolageGrotesque_800ExtraBold',
-    fontSize: 20,
-    color: '#FFFFFF',
-    letterSpacing: -0.4,
-  },
-  markAccent: { color: colors.liveBlue },
   introSection: {
     backgroundColor: colors.navy,
     overflow: 'visible',
@@ -593,14 +614,8 @@ const styles = StyleSheet.create({
     paddingBottom: 90,
   },
   lastSection: { paddingBottom: 56 },
-  glowLayerOnTear: {
-    ...StyleSheet.absoluteFillObject,
-    top: -34,
-    bottom: 34,
-    overflow: 'hidden',
-    zIndex: 3,
-  },
-  sectionInner: { position: 'relative', zIndex: 4, overflow: 'visible' },
+  sectionInner: { position: 'relative', overflow: 'visible' },
+  tornBleed: { marginHorizontal: -24 },
   eyebrowWrap: { alignItems: 'center' },
   eyebrow: {
     flexDirection: 'row',
@@ -665,46 +680,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
   },
-  sectionSubtitle: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    letterSpacing: 0.96,
-    textTransform: 'uppercase',
-    color: '#9EEFFB',
-    marginBottom: 6,
-  },
-  sectionSubtitleLight: { color: colors.subtitleBlue },
-  sectionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 10,
-    overflow: 'visible',
-  },
-  sectionTitleBigWrap: {
-    marginTop: -8,
-    overflow: 'visible',
-  },
-  sectionTitleBig: {
-    fontFamily: 'RockSalt_400Regular',
-    fontSize: 40,
-    lineHeight: 72,
-    letterSpacing: -0.4,
-    color: colors.voltCyan,
-    textAlignVertical: 'bottom',
-  },
-  sectionTitleBigLight: { color: colors.liveBlue },
-  sectionTitleSmall: {
-    fontFamily: 'PlayfairDisplay_900Black',
-    fontSize: 22,
-    lineHeight: 28,
-    letterSpacing: -0.22,
-    textTransform: 'uppercase',
-    color: '#FFFFFF',
-    paddingBottom: 20,
-  },
-  sectionTitleSmallLight: { color: colors.navy },
   carouselWrap: { marginTop: 22 },
   instructionalTopic: {
     fontFamily: 'Inter_600SemiBold',

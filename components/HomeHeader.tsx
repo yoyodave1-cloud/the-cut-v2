@@ -1,54 +1,137 @@
-import React from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Image, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
+import { StatusBar, setStatusBarStyle } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
 
+const HEADER_STRAPLINE = 'Pro golf · Creator golf · All golf';
+const LOGO_SPIN_MS = 4000;
+const STRAPLINE_TYPE_MS = 2000;
+
 export default function HomeHeader() {
+  const insets = useSafeAreaInsets();
+  const isFocused = useIsFocused();
+  const spin = useRef(new Animated.Value(0)).current;
+  const [typed, setTyped] = useState('');
+
+  useFocusEffect(
+    React.useCallback(() => {
+      setStatusBarStyle('light');
+    }, []),
+  );
+
+  useEffect(() => {
+    spin.setValue(0);
+    setTyped('');
+    let typeTimer: ReturnType<typeof setTimeout> | undefined;
+    let cancelled = false;
+
+    Animated.timing(spin, {
+      toValue: 1,
+      duration: LOGO_SPIN_MS,
+      easing: Easing.bezier(0.12, 0.72, 0.22, 1),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (!finished || cancelled) return;
+      const total = HEADER_STRAPLINE.length;
+      const step = STRAPLINE_TYPE_MS / total;
+      const tick = (count: number) => {
+        if (cancelled) return;
+        setTyped(HEADER_STRAPLINE.slice(0, count));
+        if (count < total) {
+          typeTimer = setTimeout(() => tick(count + 1), step);
+        }
+      };
+      tick(1);
+    });
+
+    return () => {
+      cancelled = true;
+      if (typeTimer) clearTimeout(typeTimer);
+    };
+  }, [spin]);
+
+  const rotateY = spin.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '1800deg'],
+  });
+
   return (
-    <View style={styles.header}>
-      <View style={styles.headerLeft}>
-        <View style={styles.homeLogoClip}>
-          <Image
-            source={require('../assets/logo-header-03.png')}
-            style={styles.homeLogo}
-            resizeMode="contain"
-          />
+    <>
+      {isFocused ? <StatusBar style="light" /> : null}
+      <View style={[styles.navbar, { paddingTop: insets.top + 14 }]}>
+        <View style={styles.navbarLeft}>
+          <View style={styles.markLogoSlot}>
+            <Animated.View
+              style={[
+                styles.markLogo,
+                { transform: [{ perspective: 900 }, { rotateY }] },
+              ]}
+            >
+              <Image
+                source={require('../assets/logo-ball-marker-transparent.png')}
+                style={styles.markLogoImage}
+                resizeMode="contain"
+              />
+            </Animated.View>
+          </View>
+          <Text style={styles.headerStrapline} numberOfLines={1}>
+            {typed}
+          </Text>
         </View>
-        <Text style={styles.strapline} numberOfLines={1}>
-          Pro golf · Creator golf · All golf
-        </Text>
+        <View style={styles.profileButton}>
+          <Ionicons name="person-outline" size={16} color="#FFFFFF" />
+        </View>
       </View>
-      <View style={styles.profileButton}>
-        <Ionicons name="person-outline" size={16} color={colors.navy} />
-      </View>
-    </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
+  navbar: {
+    zIndex: 20,
+    backgroundColor: colors.navy,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(138,155,176,0.16)',
+    paddingLeft: 10,
+    paddingRight: 16,
+    paddingBottom: 14,
+    overflow: 'visible',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.border,
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 },
-  homeLogoClip: {
-    width: 56,
-    height: 56,
-    overflow: 'hidden',
+  navbarLeft: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 8,
+    marginRight: 14,
   },
-  homeLogo: {
-    width: 56,
-    height: 56,
-    transform: [{ scale: 1.85 }],
+  markLogoSlot: {
+    width: 88,
+    height: 44,
+    overflow: 'visible',
   },
-  strapline: { color: colors.coolGrey, fontSize: 15, fontWeight: '500', flexShrink: 1 },
+  markLogo: {
+    position: 'absolute',
+    width: 88,
+    height: 88,
+    top: -22,
+    left: 0,
+  },
+  markLogoImage: {
+    width: 88,
+    height: 88,
+  },
+  headerStrapline: {
+    color: colors.voltCyan,
+    fontSize: 15,
+    fontWeight: '500',
+    flexShrink: 1,
+  },
   profileButton: {
     width: 32,
     height: 32,

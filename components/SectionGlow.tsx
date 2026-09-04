@@ -1,6 +1,6 @@
-import React, { useId, useState } from 'react';
-import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
-import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
+import React, { useId } from 'react';
+import { StyleSheet, View } from 'react-native';
+import Svg, { Defs, G, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { colors } from '../constants/colors';
 
 type WashTone = 'cyan' | 'violet';
@@ -14,19 +14,19 @@ type Stops = { offset: string; color: string; opacity: number }[];
  */
 const TONES: Record<WashTone, Stops> = {
   cyan: [
-    { offset: '0%', color: colors.voltCyan, opacity: 0.21 },
-    { offset: '22%', color: colors.voltCyan, opacity: 0.17 },
-    { offset: '44%', color: colors.liveBlue, opacity: 0.115 },
-    { offset: '64%', color: colors.liveBlue, opacity: 0.06 },
-    { offset: '82%', color: colors.voltCyan, opacity: 0.022 },
+    { offset: '0%', color: colors.voltCyan, opacity: 0.42 },
+    { offset: '22%', color: colors.voltCyan, opacity: 0.32 },
+    { offset: '44%', color: colors.liveBlue, opacity: 0.2 },
+    { offset: '64%', color: colors.liveBlue, opacity: 0.1 },
+    { offset: '82%', color: colors.voltCyan, opacity: 0.04 },
     { offset: '100%', color: colors.voltCyan, opacity: 0 },
   ],
   violet: [
-    { offset: '0%', color: colors.violet, opacity: 0.21 },
-    { offset: '22%', color: colors.violet, opacity: 0.17 },
-    { offset: '44%', color: '#EC4899', opacity: 0.105 },
-    { offset: '64%', color: '#EC4899', opacity: 0.055 },
-    { offset: '82%', color: colors.violet, opacity: 0.022 },
+    { offset: '0%', color: colors.violet, opacity: 0.42 },
+    { offset: '22%', color: colors.violet, opacity: 0.32 },
+    { offset: '44%', color: '#EC4899', opacity: 0.18 },
+    { offset: '64%', color: '#EC4899', opacity: 0.09 },
+    { offset: '82%', color: colors.violet, opacity: 0.04 },
     { offset: '100%', color: colors.violet, opacity: 0 },
   ],
 };
@@ -48,77 +48,90 @@ const WASHES: {
   { tone: 'violet', widthRatio: 1.85, heightRatio: 1.05, leftRatio: -0.1, topRatio: -0.17 },
 ];
 
-function GlowWash({
-  tone,
+export function sectionGlowIntensity(scheme: 'light' | 'dark') {
+  return scheme === 'light' ? 0.7 : 1;
+}
+
+/** Same wash rects/gradients as SectionGlow, for clipping into the torn-divider polygon. */
+export function SectionGlowPaint({
+  scheme,
   width,
   height,
-  left,
-  top,
+  idPrefix,
 }: {
-  tone: WashTone;
+  scheme: 'light' | 'dark';
   width: number;
   height: number;
-  left: number;
-  top: number;
+  idPrefix: string;
 }) {
-  const reactId = useId().replace(/[^a-zA-Z0-9]/g, '');
-  const gradientId = `wash-${tone}-${reactId}`;
-
   return (
-    <View pointerEvents="none" style={[styles.wash, { width, height, left, top }]}>
-      <Svg width={width} height={height}>
-        <Defs>
-          <RadialGradient id={gradientId} cx="50%" cy="50%" rx="50%" ry="50%">
-            {TONES[tone].map((stop) => (
-              <Stop
-                key={stop.offset}
-                offset={stop.offset}
-                stopColor={stop.color}
-                stopOpacity={stop.opacity}
-              />
-            ))}
-          </RadialGradient>
-        </Defs>
-        <Rect x="0" y="0" width={width} height={height} fill={`url(#${gradientId})`} />
-      </Svg>
-    </View>
+    <G opacity={sectionGlowIntensity(scheme)}>
+      {WASHES.map((wash) => {
+        const w = width * wash.widthRatio;
+        const h = height * wash.heightRatio;
+        const x = width * wash.leftRatio;
+        const y = height * wash.topRatio;
+        const gid = `${idPrefix}-${wash.tone}`;
+        const cx = x + w / 2;
+        const cy = y + h / 2;
+        const rx = w / 2;
+        const ry = h / 2;
+        return (
+          <G key={wash.tone}>
+            <Defs>
+              <RadialGradient
+                id={gid}
+                cx={cx}
+                cy={cy}
+                rx={rx}
+                ry={ry}
+                fx={cx}
+                fy={cy}
+                r={Math.min(rx, ry)}
+                gradientUnits="userSpaceOnUse"
+              >
+                {TONES[wash.tone].map((stop) => (
+                  <Stop
+                    key={stop.offset}
+                    offset={stop.offset}
+                    stopColor={stop.color}
+                    stopOpacity={stop.opacity}
+                  />
+                ))}
+              </RadialGradient>
+            </Defs>
+            <Rect x={x} y={y} width={w} height={h} fill={`url(#${gid})`} />
+          </G>
+        );
+      })}
+    </G>
   );
 }
 
-export default function SectionGlow({ scheme }: { scheme: 'light' | 'dark' }) {
-  const [box, setBox] = useState({ width: 0, height: 0 });
-  /** Light sections sit on #F0F4F8, where the same alpha reads far hotter and eats title contrast. */
-  const intensity = scheme === 'light' ? 0.55 : 1;
+export default function SectionGlow({
+  scheme,
+  width,
+  height,
+}: {
+  scheme: 'light' | 'dark';
+  width: number;
+  height: number;
+}) {
+  const reactId = useId().replace(/[^a-zA-Z0-9]/g, '');
 
-  const onLayout = ({ nativeEvent }: LayoutChangeEvent) => {
-    const { width, height } = nativeEvent.layout;
-    if (width !== box.width || height !== box.height) setBox({ width, height });
-  };
+  if (width <= 0 || height <= 0) return null;
 
   return (
-    <View pointerEvents="none" style={[styles.layer, { opacity: intensity }]} onLayout={onLayout}>
-      {box.width > 0
-        ? WASHES.map((wash) => (
-            <GlowWash
-              key={wash.tone}
-              tone={wash.tone}
-              width={box.width * wash.widthRatio}
-              height={box.height * wash.heightRatio}
-              left={box.width * wash.leftRatio}
-              top={box.height * wash.topRatio}
-            />
-          ))
-        : null}
+    <View pointerEvents="none" style={[styles.layer, { width, height }]}>
+      <Svg width={width} height={height}>
+        <SectionGlowPaint scheme={scheme} width={width} height={height} idPrefix={`sg-${reactId}`} />
+      </Svg>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   layer: {
-    ...StyleSheet.absoluteFillObject,
     overflow: 'hidden',
-  },
-  wash: {
-    position: 'absolute',
   },
 });

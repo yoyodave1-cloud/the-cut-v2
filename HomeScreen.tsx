@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  SafeAreaView,
   FlatList,
   View,
   Text,
@@ -9,9 +8,10 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import HomeHeader from './components/HomeHeader';
+import PageGlow from './components/PageGlow';
+import SectionTitle from './components/SectionTitle';
 import { NewsCardCompact, TrendingList } from './components/FeedNewsCards';
 import {
   Article,
@@ -174,20 +174,22 @@ export default function HomeScreen() {
     loadMore();
   }, [loadMore]);
 
-  if (loading) {
-    return (
-      <SafeAreaView style={[styles.safeArea, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={colors.liveBlue} />
-        <Text style={{ color: colors.coolGrey, marginTop: 12 }}>Loading The Cut v2.0…</Text>
-      </SafeAreaView>
-    );
-  }
-
   return (
     <ArticleReaderProvider>
-      <SafeAreaView style={styles.safeArea}>
-        <StatusBar style="dark" />
+      <View style={styles.safeArea}>
+        <HomeHeader />
+        <PageGlow>
+          <View style={styles.pageTitle}>
+            <SectionTitle big="Tour" small="golf" scheme="light" />
+          </View>
+        {loading ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator size="large" color={colors.liveBlue} />
+            <Text style={styles.loadingText}>Loading The Cut v2.0…</Text>
+          </View>
+        ) : (
         <FlatList
+          style={styles.list}
           data={feedBlocks}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
@@ -197,7 +199,6 @@ export default function HomeScreen() {
           )}
           ListHeaderComponent={
             <>
-              <HomeHeader />
               <UpcomingEventsStrip />
               {tourLatestVideos.length > 0 ? (
                 <View style={styles.tourLatestCarouselWrap}>
@@ -229,7 +230,9 @@ export default function HomeScreen() {
           onEndReached={handleEndReached}
           onEndReachedThreshold={0.35}
         />
-      </SafeAreaView>
+        )}
+        </PageGlow>
+      </View>
     </ArticleReaderProvider>
   );
 }
@@ -238,6 +241,18 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.bg },
+  loadingWrap: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: { color: colors.coolGrey, fontSize: 14, marginTop: 12 },
+  list: { flex: 1, backgroundColor: 'transparent' },
+  pageTitle: {
+    paddingHorizontal: 16,
+    paddingTop: 28,
+  },
 
   tagLabel: {
     fontSize: 9,

@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Svg, { Polygon } from 'react-native-svg';
+import Svg, { ClipPath, Defs, G, Polygon, Rect } from 'react-native-svg';
 import { colors } from '../constants/colors';
+import { SectionGlowPaint } from './SectionGlow';
 
 /**
  * Polygon point-sets ported 1:1 from homepage_mockup.html (viewBox 0 0 390 34).
@@ -19,6 +20,7 @@ export const TORN_DIVIDER_VARIANTS = [
 ] as const;
 
 const DEFAULT_HEIGHT = 34;
+const VIEWBOX_WIDTH = 390;
 const VIEWBOX_HEIGHT = 34;
 /** Extra px painted into the following section so a hairline of page bg cannot show at the join. */
 const SEAM_OVERLAP = 1;
@@ -32,13 +34,31 @@ type TornDividerProps = {
   scheme: 'light' | 'dark';
   variant?: number;
   height?: number;
+  /** Following section’s laid-out size — wash is sampled in that space and clipped to the tear. */
+  sectionWidth?: number;
+  sectionHeight?: number;
 };
+
+function scalePoints(points: string, width: number, height: number, srcW: number, srcH: number) {
+  return points
+    .trim()
+    .split(/\s+/)
+    .map((pair) => {
+      const [x, y] = pair.split(',').map(Number);
+      return `${(x / srcW) * width},${(y / srcH) * height}`;
+    })
+    .join(' ');
+}
 
 export default function TornDivider({
   scheme,
   variant = 0,
   height = DEFAULT_HEIGHT,
+  sectionWidth = 0,
+  sectionHeight = 0,
 }: TornDividerProps) {
+  const reactId = useId().replace(/[^a-zA-Z0-9]/g, '');
+  const clipId = `tear-${reactId}`;
   const fill = TORN_FILLS[scheme];
   const points =
     TORN_DIVIDER_VARIANTS[
@@ -49,17 +69,44 @@ export default function TornDivider({
     /,34(?=\s|$)/g,
     `,${VIEWBOX_HEIGHT + SEAM_OVERLAP}`,
   );
+  const svgH = height + SEAM_OVERLAP;
+  const srcH = VIEWBOX_HEIGHT + SEAM_OVERLAP;
+  const useGlow = sectionWidth > 0 && sectionHeight > 0;
+  const polygonPoints = useGlow
+    ? scalePoints(overlappedPoints, sectionWidth, svgH, VIEWBOX_WIDTH, srcH)
+    : overlappedPoints;
 
   return (
     <View pointerEvents="none" style={[styles.wrap, { height, marginTop: -height }]}>
-      <Svg
-        width="100%"
-        height={height + SEAM_OVERLAP}
-        viewBox={`0 0 390 ${VIEWBOX_HEIGHT + SEAM_OVERLAP}`}
-        preserveAspectRatio="none"
-      >
-        <Polygon points={overlappedPoints} fill={fill} />
-      </Svg>
+      {useGlow ? (
+        <Svg width={sectionWidth} height={svgH}>
+          <Defs>
+            <ClipPath id={clipId}>
+              <Polygon points={polygonPoints} />
+            </ClipPath>
+          </Defs>
+          <G clipPath={`url(#${clipId})`}>
+            <Rect x={0} y={0} width={sectionWidth} height={svgH} fill={fill} />
+            <G transform={`translate(0, ${height})`}>
+              <SectionGlowPaint
+                scheme={scheme}
+                width={sectionWidth}
+                height={sectionHeight}
+                idPrefix={`td-${reactId}`}
+              />
+            </G>
+          </G>
+        </Svg>
+      ) : (
+        <Svg
+          width="100%"
+          height={svgH}
+          viewBox={`0 0 ${VIEWBOX_WIDTH} ${srcH}`}
+          preserveAspectRatio="none"
+        >
+          <Polygon points={overlappedPoints} fill={fill} />
+        </Svg>
+      )}
     </View>
   );
 }

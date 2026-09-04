@@ -1,13 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
 import { ArticleReaderProvider } from '../ArticleReader';
 import {
   Article,
@@ -21,9 +19,10 @@ import {
 import { THE_FEED_CARD_TAG } from '../lib/theFeedColumn';
 import { normalizeNewsTitleKey } from '../lib/creatorNewsFilter';
 import HotRightNowCard from '../components/cards/HotRightNowCard';
-import DailyAvatarVideo from '../components/DailyAvatarVideo';
 import { NewsCardCompact, TrendingList } from '../components/FeedNewsCards';
 import HomeHeader from '../components/HomeHeader';
+import PageGlow from '../components/PageGlow';
+import SectionTitle from '../components/SectionTitle';
 import ShortGameMasterclass from '../components/ShortGameMasterclass';
 import TopCreatorsList from '../components/TopCreatorsList';
 import { VideoCarousel } from '../components/VideoFeedCards';
@@ -96,8 +95,12 @@ export default function CreatorPage() {
 
   return (
     <ArticleReaderProvider>
-      <SafeAreaView style={styles.safeArea}>
-        <StatusBar style="dark" />
+      <View style={styles.safeArea}>
+        <HomeHeader />
+        <PageGlow>
+          <View style={styles.pageTitle}>
+            <SectionTitle big="Creator" small="golf" scheme="light" />
+          </View>
         {loading ? (
           <View style={styles.loadingWrap}>
             <ActivityIndicator size="large" color={colors.liveBlue} />
@@ -105,14 +108,10 @@ export default function CreatorPage() {
           </View>
         ) : (
           <ScrollView
+            style={styles.scroll}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
           >
-            <HomeHeader />
-            <View style={styles.dailyVideoWrap}>
-              <DailyAvatarVideo />
-            </View>
-
             <View style={styles.feedSections}>
               {error ? <Text style={styles.feedError}>Couldn't reach the backend: {error}</Text> : null}
 
@@ -151,7 +150,8 @@ export default function CreatorPage() {
             <TopCreatorsList />
           </ScrollView>
         )}
-      </SafeAreaView>
+        </PageGlow>
+      </View>
     </ArticleReaderProvider>
   );
 }
@@ -165,12 +165,12 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: { color: colors.coolGrey, fontSize: 14 },
-  scrollContent: { paddingBottom: 24 },
-  dailyVideoWrap: {
-    width: '100%',
+  scroll: { flex: 1, backgroundColor: 'transparent' },
+  pageTitle: {
     paddingHorizontal: 16,
-    marginBottom: 14,
+    paddingTop: 28,
   },
+  scrollContent: { paddingBottom: 24 },
   feedSections: { paddingHorizontal: 16 },
   feedError: { color: colors.bogeyRed, marginBottom: 12 },
 });
