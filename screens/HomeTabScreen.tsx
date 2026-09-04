@@ -26,7 +26,7 @@ import {
   todaysInstructionalTopic,
 } from '../api';
 import { ArticleReaderProvider } from '../ArticleReader';
-import DiagonalFade from '../components/DiagonalFade';
+import SectionGlow from '../components/SectionGlow';
 import TornDivider from '../components/TornDivider';
 import HotRightNowCard from '../components/cards/HotRightNowCard';
 import { NewsCardCompact } from '../components/FeedNewsCards';
@@ -136,7 +136,7 @@ function HomeSection({
   return (
     <View style={[scheme === 'light' ? styles.lightSection : styles.darkSection, last && styles.lastSection]}>
       <View pointerEvents="none" style={styles.glowLayerOnTear}>
-        <DiagonalFade scheme={scheme} />
+        <SectionGlow scheme={scheme} />
       </View>
       <View style={styles.sectionInner}>{children}</View>
     </View>
@@ -147,7 +147,7 @@ function IntroSection() {
   return (
     <View style={styles.introSection}>
       <View pointerEvents="none" style={styles.glowLayerOnTear}>
-        <DiagonalFade scheme="dark" />
+        <SectionGlow scheme="dark" />
       </View>
       <View style={styles.sectionInner}>
         <View style={styles.eyebrowWrap}>
@@ -595,6 +595,8 @@ const styles = StyleSheet.create({
   lastSection: { paddingBottom: 56 },
   glowLayerOnTear: {
     ...StyleSheet.absoluteFillObject,
+    top: -34,
+    bottom: 34,
     overflow: 'hidden',
     zIndex: 3,
   },

@@ -1,6 +1,7 @@
-import React, { useId } from 'react';
+import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import Svg, { Defs, LinearGradient, Polygon, Stop } from 'react-native-svg';
+import Svg, { Polygon } from 'react-native-svg';
+import { colors } from '../constants/colors';
 
 /**
  * Polygon point-sets ported 1:1 from homepage_mockup.html (viewBox 0 0 390 34).
@@ -18,11 +19,13 @@ export const TORN_DIVIDER_VARIANTS = [
 ] as const;
 
 const DEFAULT_HEIGHT = 34;
+const VIEWBOX_HEIGHT = 34;
+/** Extra px painted into the following section so a hairline of page bg cannot show at the join. */
+const SEAM_OVERLAP = 1;
 
-/** Pastel cyan→purple blends from homepage_mockup.html (#tornLight / #tornDark). */
-const TORN_GRADIENTS = {
-  light: { start: '#9CEFFA', end: '#D2C6F7' },
-  dark: { start: '#05889F', end: '#453685' },
+const TORN_FILLS = {
+  light: colors.bg,
+  dark: colors.navy,
 } as const;
 
 type TornDividerProps = {
@@ -36,25 +39,26 @@ export default function TornDivider({
   variant = 0,
   height = DEFAULT_HEIGHT,
 }: TornDividerProps) {
-  const reactId = useId().replace(/[^a-zA-Z0-9]/g, '');
-  const gradientId = `torn-${scheme}-${reactId}`;
-  const { start, end } = TORN_GRADIENTS[scheme];
+  const fill = TORN_FILLS[scheme];
   const points =
     TORN_DIVIDER_VARIANTS[
       ((variant % TORN_DIVIDER_VARIANTS.length) + TORN_DIVIDER_VARIANTS.length) %
         TORN_DIVIDER_VARIANTS.length
     ];
+  const overlappedPoints = points.replace(
+    /,34(?=\s|$)/g,
+    `,${VIEWBOX_HEIGHT + SEAM_OVERLAP}`,
+  );
 
   return (
     <View pointerEvents="none" style={[styles.wrap, { height, marginTop: -height }]}>
-      <Svg width="100%" height={height} viewBox="0 0 390 34" preserveAspectRatio="none">
-        <Defs>
-          <LinearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor={start} />
-            <Stop offset="100%" stopColor={end} />
-          </LinearGradient>
-        </Defs>
-        <Polygon points={points} fill={`url(#${gradientId})`} />
+      <Svg
+        width="100%"
+        height={height + SEAM_OVERLAP}
+        viewBox={`0 0 390 ${VIEWBOX_HEIGHT + SEAM_OVERLAP}`}
+        preserveAspectRatio="none"
+      >
+        <Polygon points={overlappedPoints} fill={fill} />
       </Svg>
     </View>
   );
@@ -63,5 +67,6 @@ export default function TornDivider({
 const styles = StyleSheet.create({
   wrap: {
     zIndex: 1,
+    overflow: 'visible',
   },
 });
