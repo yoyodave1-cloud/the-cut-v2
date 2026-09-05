@@ -17,6 +17,12 @@
     "plugins": [
       "expo-font",
       "expo-video"
-    ]
+    ],
+    "owner": "thecutgolf-app",
+    "extra": {
+      "eas": {
+        "projectId": "db6ca6b1-0de0-48af-8202-52d0c3f34d90"
+      }
+    }
   }
 }
