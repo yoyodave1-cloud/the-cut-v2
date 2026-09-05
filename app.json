@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "The Cut v2.0 Preview",
+    "name": "The Cut",
     "slug": "the-cut-v2-preview",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -9,7 +9,8 @@
       "backgroundColor": "#F0F4F8"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.provailai.thecut"
     },
     "android": {},
     "web": {},
