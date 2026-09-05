@@ -2,59 +2,6 @@
 
 Patches in this folder integrate with the shared Railway API (`the-cut/backend/server.js`).
 
-## Academy (swing analysis)
-
-The `academy/` folder is a **standalone Railway service** (project `the-cut-academy`,
-service `academy`, entrypoint `academy/server.js`), deployed separately from the shared
-backend so pose analysis can never affect the main app's API.
-
-Production URL: `https://academy-production-752f.up.railway.app` (the app's
-`lib/academy/api.ts` points here). Deploy updates with
-`cd backend/academy && railway up --service academy --detach`.
-
-Pipeline: upload a swing video → 2D pose estimation (MoveNet via TensorFlow.js; no LLM)
-→ per-shot-type checkpoint/fault evaluation → coaching narration (Claude over structured
-data only; deterministic fallback without a key) → creator-video recommendations.
-
-**Privacy/cost model (round 2):** raw video is processed from a temp file and deleted —
-it is *never* stored server-side (no storage bucket, no video columns). The user's device
-keeps the only copy (`lib/academy/localVideo.ts`); the durable record is the pose landmark
-data. Analyses run through a serial in-process queue to keep memory flat on a small
-always-on instance.
-
-Routes:
-
-- `GET /health`
-- `GET /academy/shot-types` — checkpoint library metadata (phases, metrics, faults, recording tips)
-- `POST /academy/uploads` — multipart `video` + `userId`, `shotType` (`driving|iron|bunker|chipping|putting`), `angleType` (`face_on|down_the_line`). Returns `{uploadId, status: "processing"}`; analysis is queued, video deleted after processing.
-- `GET /academy/uploads/:id` — status + full analysis + recommendations when complete
-- `GET /academy/uploads?userId=&shotType=` — session history with per-session summaries
-- `DELETE /academy/uploads/:id?userId=` — delete one session; progress rows cascade so trends drop it immediately
-- `DELETE /academy/users/:userId` — GDPR erase-all for a user
-- `GET /academy/dashboard?userId=` — per-shot-type trends, focus faults, recent recommendations
-
-Env (set on the Railway service): `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`,
-`ANTHROPIC_API_KEY` (optional — coaching falls back to built-in copy),
-`ACADEMY_COACH_MODEL` (prod runs `claude-haiku-4-5-20251001`; prototype default is
-`claude-fable-5`), `ACADEMY_POSE_MODEL` (`movenet` default | `blazepose`).
-
-Migrations: `backend/supabase/migrations/academy.sql` + `academy_round2_local_video.sql`
-(both applied to the live project, 2026-07-08).
-
-Local dev: `cd backend/academy && npm install && node server.js` (reads `.env`; listens
-on :4100 — point `ACADEMY_API_BASE` at your LAN IP). Tests: `node smokeTest.js` runs 45
-ground-truth keyframe/tempo cases — 5 shot types × tempo/trim/aftermath variants including
-tee-pickup, walk-off, camera-grab, and motion-blur wrist dropout (no video needed);
-`node smokeTest.js swing.mp4 driving face_on` runs the full pipeline on a real clip.
-
-Phase detection is anchored on a swing-likeness search (ankle stillness, shoulder-height
-stability, hands-return-to-address, hand-height V), so footage before/after the swing —
-waggles, picking up the tee, walking off, grabbing the camera — can never claim a
-checkpoint. Long clips are re-sampled densely (two-pass) around the detected swing.
-
-`patches/academy.js` remains only for optionally mounting the same routes inside the
-shared `server.js` — not the deployed path.
-
 ## Creators top-100
 
 `patches/creators-top100.js` — `GET /creators/top100`

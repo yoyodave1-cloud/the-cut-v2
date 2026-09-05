@@ -16,7 +16,6 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import HomeScreen from './HomeScreen';
 import HomeTabScreen from './screens/HomeTabScreen';
 import CreatorsStackNavigator from './navigation/CreatorsStackNavigator';
-import AcademyStackNavigator from './navigation/AcademyStackNavigator';
 import { colors } from './constants/colors';
 
 const Tab = createBottomTabNavigator();
@@ -80,15 +79,6 @@ function MainTabs() {
           tabBarLabel: 'Creator',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="camera-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Academy"
-        component={AcademyStackNavigator}
-        options={{
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="school-outline" size={size} color={color} />
           ),
         }}
       />
