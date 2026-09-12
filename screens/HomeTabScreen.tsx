@@ -58,6 +58,8 @@ import heroReel from '../assets/gap-video.mp4';
 
 const NEWS_LIMIT = 3;
 const VIDEO_LIMIT = 8;
+const PGA_TOUR_NEWS_Q =
+  '"PGA Tour" OR "PGA TOUR" OR pgatour OR "FedEx Cup" OR "FedExCup" OR "Presidents Cup"';
 
 function productTestToMasterclassCard(video: ProductTestVideo, index: number): ShortGameVideo {
   return {
@@ -685,7 +687,7 @@ async function loadHomeFeed(): Promise<HomeFeed> {
     instructional,
   ] = await Promise.allSettled([
     fetchTourLatestVideosByCreatorName('PGA Tour', VIDEO_LIMIT),
-    fetchNewsPage({ q: '"PGA Tour"', pageSize: NEWS_LIMIT }),
+    fetchNewsPage({ q: PGA_TOUR_NEWS_Q, pageSize: NEWS_LIMIT }),
     fetchTourLatestVideosByCreatorName('DP World Tour', VIDEO_LIMIT),
     fetchNewsPage({
       q: '"DP World Tour" OR "Race to Dubai" OR ("European Tour" AND golf)',
