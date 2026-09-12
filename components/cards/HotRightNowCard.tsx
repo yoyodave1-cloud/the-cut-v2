@@ -7,10 +7,13 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   fetchHotRightNow,
   formatHotRightNowViewCount,
   formatVelocityPerHour,
+  logImageError,
+  subscribeHotRightNow,
   type HotRightNowVideo,
 } from '../../api';
 import { useOpenArticle } from '../../ArticleReader';
@@ -18,9 +21,7 @@ import CreatorAvatar from '../CreatorAvatar';
 import { colors } from '../../constants/colors';
 
 const ACCENT = '#FF6B35';
-const ROW_DIVIDER = '#E5E9EE';
 const COLLAPSED_ROW_COUNT = 3;
-const ROW_GAP = 34;
 
 type HotRightNowCardProps = {
   maxItems?: number;
@@ -36,23 +37,60 @@ function formatMetaStat(video: HotRightNowVideo): string {
   return formatHotRightNowViewCount(video.viewCount);
 }
 
-function SkeletonRows() {
+function SkeletonCards() {
   return (
     <>
       {[0, 1, 2].map((i) => (
-        <View
-          key={i}
-          style={[styles.row, i < 2 ? styles.rowDivider : null, { opacity: 0.5 }]}
-        >
-          <View style={styles.rowContent}>
-            <View style={styles.skeletonLineWide} />
-            <View style={styles.skeletonLineMedium} />
-            <View style={styles.skeletonLineNarrow} />
-          </View>
+        <View key={i} style={[styles.itemCard, { opacity: 0.5 }]}>
           <View style={styles.skeletonThumb} />
+          <View style={styles.skeletonLineWide} />
+          <View style={styles.skeletonLineMedium} />
+          <View style={styles.skeletonLineNarrow} />
         </View>
       ))}
     </>
+  );
+}
+
+function VideoFeaturedCard({
+  video,
+  onPress,
+}: {
+  video: HotRightNowVideo;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity style={styles.itemCard} onPress={onPress} activeOpacity={0.8}>
+      <View style={styles.thumbnailWrap}>
+        <Image
+          source={{ uri: video.thumbnailUrl }}
+          style={styles.thumbnail}
+          resizeMode="cover"
+          onError={logImageError('hot-right-now', video.thumbnailUrl)}
+        />
+      </View>
+      <Text style={styles.videoTitle} numberOfLines={2}>
+        {video.title}
+      </Text>
+      {video.summary ? (
+        <Text style={styles.videoSummary} numberOfLines={2}>
+          {video.summary}
+        </Text>
+      ) : null}
+      <View style={styles.metaRow}>
+        <CreatorAvatar
+          name={video.creator.name}
+          avatarUrl={video.creator.avatarUrl}
+          size={24}
+          style={styles.metaAvatar}
+        />
+        <Text style={styles.creatorName} numberOfLines={1}>
+          {video.creator.name}
+        </Text>
+        <Text style={styles.metaDot}> · </Text>
+        <Text style={styles.metaStat}>{formatMetaStat(video)}</Text>
+      </View>
+    </TouchableOpacity>
   );
 }
 
@@ -68,22 +106,30 @@ export default function HotRightNowCard({
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-    fetchHotRightNow()
-      .then((data) => {
-        if (!cancelled) setVideos(data);
-      })
-      .catch((err) => {
-        console.warn('[HotRightNowCard] fetch failed:', err);
-        if (!cancelled) setVideos([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    return subscribeHotRightNow((data) => {
+      setVideos(data);
+      setLoading(false);
+    });
   }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      let cancelled = false;
+      fetchHotRightNow()
+        .then((data) => {
+          if (!cancelled) setVideos(data);
+        })
+        .catch((err) => {
+          console.warn('[HotRightNowCard] fetch failed:', err);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
 
   if (!loading && videos.length === 0) return null;
 
@@ -92,9 +138,9 @@ export default function HotRightNowCard({
   const visibleVideos = expanded || !expandable ? capped : capped.slice(0, COLLAPSED_ROW_COUNT);
 
   return (
-    <View style={styles.card}>
+    <View style={styles.section}>
       {showHeader ? (
-        <>
+        <View style={styles.headerCard}>
           <View style={styles.accentBar} />
           <View style={styles.header}>
             <View style={styles.headerLeft}>
@@ -108,60 +154,20 @@ export default function HotRightNowCard({
               <Text style={styles.badgeText}>TOP 10</Text>
             </View>
           </View>
-        </>
+        </View>
       ) : null}
 
-      <View style={[styles.rowsSection, !showHeader && styles.rowsSectionCompact]}>
-        {loading ? (
-          <SkeletonRows />
-        ) : (
-          visibleVideos.map((video, index) => (
-            <TouchableOpacity
-              key={video.videoId}
-              style={[
-                styles.row,
-                index < visibleVideos.length - 1 ? styles.rowDivider : null,
-              ]}
-              onPress={() => openVideo(video.watchUrl, video.title)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.rowContent}>
-                <View style={styles.titleBlock}>
-                  <View style={styles.rankBadge}>
-                    <Text style={styles.rank}>{index + 1}</Text>
-                  </View>
-                  <Text style={styles.videoTitle} numberOfLines={2}>
-                    {video.title}
-                  </Text>
-                </View>
-                <Text style={styles.videoSummary} numberOfLines={2}>
-                  {video.summary}
-                </Text>
-                <View style={styles.metaRow}>
-                  <View style={styles.metaLeading}>
-                    <CreatorAvatar
-                      name={video.creator.name}
-                      avatarUrl={video.creator.avatarUrl}
-                      size={28}
-                      style={styles.metaAvatar}
-                    />
-                    <Text style={styles.creatorName} numberOfLines={1}>
-                      {video.creator.name}
-                    </Text>
-                    <Text style={styles.metaDot}> · </Text>
-                  </View>
-                  <Text style={styles.metaStat}>{formatMetaStat(video)}</Text>
-                </View>
-              </View>
-              <Image
-                source={{ uri: video.thumbnailUrl }}
-                style={styles.thumbnail}
-                resizeMode="cover"
-              />
-            </TouchableOpacity>
-          ))
-        )}
-      </View>
+      {loading ? (
+        <SkeletonCards />
+      ) : (
+        visibleVideos.map((video) => (
+          <VideoFeaturedCard
+            key={video.videoId}
+            video={video}
+            onPress={() => openVideo(video.watchUrl, video.title)}
+          />
+        ))
+      )}
 
       {showFooter ? (
         <View style={styles.footer}>
@@ -176,9 +182,7 @@ export default function HotRightNowCard({
               }
             }}
           >
-            <Text style={styles.footerRight}>
-              {expanded ? 'Show less' : 'All trending ›'}
-            </Text>
+            <Text style={styles.footerRight}>{expanded ? 'Show less' : 'All trending ›'}</Text>
           </TouchableOpacity>
         </View>
       ) : null}
@@ -187,13 +191,16 @@ export default function HotRightNowCard({
 }
 
 const styles = StyleSheet.create({
-  card: {
+  section: {
+    marginBottom: 13,
+  },
+  headerCard: {
     backgroundColor: colors.card,
     borderRadius: 15,
     borderWidth: 0.5,
     borderColor: colors.border,
-    marginBottom: 13,
     overflow: 'hidden',
+    marginBottom: 10,
   },
   accentBar: {
     height: 3,
@@ -205,13 +212,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 15,
     paddingTop: 12,
-    paddingBottom: 0,
-  },
-  rowsSection: {
-    marginTop: ROW_GAP,
-  },
-  rowsSectionCompact: {
-    marginTop: 0,
+    paddingBottom: 12,
   },
   headerLeft: {
     flex: 1,
@@ -245,65 +246,43 @@ const styles = StyleSheet.create({
     color: ACCENT,
     textTransform: 'uppercase',
   },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingHorizontal: 15,
-    paddingTop: 14,
-    paddingBottom: 14,
-    marginBottom: ROW_GAP,
+  itemCard: {
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    borderWidth: 0.5,
+    borderColor: colors.border,
+    padding: 12,
+    marginBottom: 10,
   },
-  rowDivider: {
-    borderBottomWidth: 2,
-    borderBottomColor: ROW_DIVIDER,
+  thumbnailWrap: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: colors.midNavy,
   },
-  rowContent: {
-    flex: 1,
-    marginRight: 14,
-    minWidth: 0,
-  },
-  titleBlock: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-  },
-  rankBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#000000',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rank: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 16,
-    color: '#FFFFFF',
+  thumbnail: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 8,
   },
   videoTitle: {
-    flex: 1,
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 17,
+    fontSize: 18,
+    lineHeight: 24,
     color: colors.navy,
-    lineHeight: 23,
+    marginTop: 8,
   },
   videoSummary: {
-    fontSize: 15,
-    color: colors.coolGrey,
-    marginTop: 8,
-    lineHeight: 21,
+    fontSize: 16,
+    lineHeight: 22,
+    color: colors.mutedGrey,
+    marginTop: 6,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 10,
-    gap: 4,
-  },
-  metaLeading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    minWidth: 0,
+    marginTop: 6,
   },
   metaAvatar: {
     marginRight: 8,
@@ -311,33 +290,25 @@ const styles = StyleSheet.create({
   },
   creatorName: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
+    fontSize: 15,
     color: colors.liveBlue,
     flexShrink: 1,
   },
   metaDot: {
     color: colors.coolGrey,
-    fontSize: 13,
+    fontSize: 15,
   },
   metaStat: {
-    fontSize: 13,
+    fontSize: 15,
     color: colors.coolGrey,
     flexShrink: 0,
-  },
-  thumbnail: {
-    width: 88,
-    height: 88,
-    borderRadius: 6,
-    backgroundColor: colors.midNavy,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 15,
+    paddingHorizontal: 4,
     paddingVertical: 10,
-    borderTopWidth: 0.5,
-    borderTopColor: ROW_DIVIDER,
   },
   footerLeft: {
     fontSize: 11,
@@ -349,29 +320,30 @@ const styles = StyleSheet.create({
     color: ACCENT,
   },
   skeletonThumb: {
-    width: 88,
-    height: 88,
-    borderRadius: 6,
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: 8,
     backgroundColor: colors.border,
   },
   skeletonLineWide: {
-    height: 14,
+    height: 16,
     backgroundColor: colors.border,
     borderRadius: 4,
+    marginTop: 8,
     width: '92%',
   },
   skeletonLineMedium: {
     height: 14,
     backgroundColor: colors.border,
     borderRadius: 4,
-    marginTop: 8,
+    marginTop: 6,
     width: '78%',
   },
   skeletonLineNarrow: {
     height: 12,
     backgroundColor: colors.border,
     borderRadius: 4,
-    marginTop: 10,
+    marginTop: 6,
     width: '55%',
   },
 });

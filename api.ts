@@ -472,15 +472,54 @@ function normalizeHotRightNowVideo(raw: HotRightNowApiRow): HotRightNowVideo | n
   };
 }
 
-export async function fetchHotRightNow(): Promise<HotRightNowVideo[]> {
+const HOT_RIGHT_NOW_CLIENT_TTL_MS = 60 * 60 * 1000;
+
+type HotRightNowListener = (videos: HotRightNowVideo[]) => void;
+
+let hotRightNowCache: { videos: HotRightNowVideo[]; fetchedAt: number } | null = null;
+let hotRightNowInflight: Promise<HotRightNowVideo[]> | null = null;
+const hotRightNowListeners = new Set<HotRightNowListener>();
+
+export function subscribeHotRightNow(listener: HotRightNowListener): () => void {
+  hotRightNowListeners.add(listener);
+  if (hotRightNowCache) listener(hotRightNowCache.videos);
+  return () => {
+    hotRightNowListeners.delete(listener);
+  };
+}
+
+function publishHotRightNow(videos: HotRightNowVideo[]) {
+  hotRightNowCache = { videos, fetchedAt: Date.now() };
+  hotRightNowListeners.forEach((listener) => listener(videos));
+}
+
+async function requestHotRightNow(): Promise<HotRightNowVideo[]> {
   const res = await fetch(`${API_BASE}/hot-right-now`);
   if (!res.ok) throw new Error(`hot-right-now failed (${res.status})`);
   const json = await res.json();
   const list = Array.isArray(json) ? json : [];
-  return list
+  const videos = list
     .map((row) => normalizeHotRightNowVideo(row as HotRightNowApiRow))
     .filter((row): row is HotRightNowVideo => row != null)
     .slice(0, 10);
+  publishHotRightNow(videos);
+  return videos;
+}
+
+/** Shared by Home and Creators so both screens show the same ranked list. */
+export async function fetchHotRightNow(): Promise<HotRightNowVideo[]> {
+  if (
+    hotRightNowCache &&
+    Date.now() - hotRightNowCache.fetchedAt < HOT_RIGHT_NOW_CLIENT_TTL_MS
+  ) {
+    return hotRightNowCache.videos;
+  }
+  if (!hotRightNowInflight) {
+    hotRightNowInflight = requestHotRightNow().finally(() => {
+      hotRightNowInflight = null;
+    });
+  }
+  return hotRightNowInflight;
 }
 
 export function formatVelocityPerHour(velocity: number): string {

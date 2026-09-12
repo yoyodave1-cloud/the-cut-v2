@@ -769,8 +769,8 @@ function HomeTabBody() {
         <HomeSection scheme="dark" tornVariant={1}>
           <SectionTitle subtitle="Hot Right Now" big="Creator" small="golf" scheme="dark" />
           <View style={styles.newsWrap}>
-            <HotRightNowCard maxItems={5} expandable={false} showHeader={false} showFooter={false} />
-            <SeeAllLink label="See all trending →" scheme="dark" onPress={goCreators} />
+            <HotRightNowCard maxItems={3} expandable={false} showHeader={false} showFooter={false} />
+            <SeeAllLink label="See all trending live →" scheme="dark" onPress={goCreators} />
           </View>
         </HomeSection>
 
