@@ -1,5 +1,6 @@
 import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Article } from '../api';
 import { useOpenArticle } from '../ArticleReader';
 import { colors } from '../constants/colors';
@@ -11,6 +12,62 @@ function timeAgo(iso: string) {
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
   return `${days}d ago`;
+}
+
+export function FeaturedNewsCard({
+  article,
+  tag,
+  headline,
+  imageUrl,
+  source,
+  articleUrl,
+  publishedAt,
+}: {
+  article?: Article;
+  tag?: string;
+  headline?: string;
+  imageUrl?: string;
+  source?: string | { name?: string };
+  articleUrl?: string;
+  publishedAt?: string;
+}) {
+  const openArticle = useOpenArticle();
+  const resolved: Article = article ?? {
+    title: headline ?? '',
+    url: articleUrl ?? '',
+    urlToImage: imageUrl,
+    source: { name: typeof source === 'string' ? source : source?.name ?? '' },
+    publishedAt: publishedAt ?? '',
+  };
+  if (!resolved.url && !resolved.title) return null;
+
+  return (
+    <TouchableOpacity
+      style={styles.featuredNewsCard}
+      activeOpacity={0.8}
+      onPress={() => openArticle(resolved.url, resolved.title)}
+    >
+      {resolved.urlToImage ? (
+        <Image
+          source={{ uri: resolved.urlToImage }}
+          style={styles.featuredImage}
+          resizeMode="cover"
+        />
+      ) : (
+        <View style={[styles.featuredImage, { backgroundColor: colors.midNavy }]} />
+      )}
+      <View style={{ padding: 12 }}>
+        {tag ? <Text style={styles.scaledTagLabel}>{tag}</Text> : null}
+        <Text style={styles.featuredTitle}>{resolved.title}</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
+          <Text style={styles.featuredCardMeta}>
+            {resolved.source?.name} · {timeAgo(resolved.publishedAt)}
+          </Text>
+          <Ionicons name="share-outline" size={16} color={colors.coolGrey} />
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
 }
 
 export function NewsCardCompact({ article, tag }: { article: Article; tag?: string }) {
@@ -101,6 +158,17 @@ const styles = StyleSheet.create({
   compactThumb: { width: 100, height: 100, borderRadius: 10, flexShrink: 0 },
   cardTitle: { fontSize: 17, fontWeight: '700', color: colors.navy, lineHeight: 23 },
   compactCardMeta: { fontSize: 13, color: colors.coolGrey, marginTop: 5 },
+  featuredNewsCard: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    borderWidth: 0.5,
+    borderColor: colors.border,
+    overflow: 'hidden',
+    marginBottom: 14,
+  },
+  featuredImage: { width: '100%', aspectRatio: 16 / 9 },
+  featuredTitle: { fontSize: 18, fontWeight: '700', color: colors.navy, lineHeight: 24, marginTop: 4 },
+  featuredCardMeta: { fontSize: 11, color: colors.coolGrey, marginTop: 4 },
   sectionTitleScaled: { fontSize: 20, fontWeight: '700', color: colors.navy, marginTop: 8, marginBottom: 3 },
   trendingBox: {
     backgroundColor: colors.card,

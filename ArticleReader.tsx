@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
   toolbarTitleSpacer: { flex: 1 },
   webview: { flex: 1, backgroundColor: colors.card },
   loadingWrap: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.card,

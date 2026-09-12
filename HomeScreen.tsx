@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import HomeHeader from './components/HomeHeader';
 import PageGlow from './components/PageGlow';
 import SectionTitle from './components/SectionTitle';
-import { NewsCardCompact, TrendingList } from './components/FeedNewsCards';
+import { NewsCardCompact, TrendingList, FeaturedNewsCard } from './components/FeedNewsCards';
 import {
   Article,
   TOUR_LATEST_HEADER_LIMIT,
@@ -26,49 +26,9 @@ import {
   VideoCarousel,
 } from './components/VideoFeedCards';
 import UpcomingEventsStrip from './components/UpcomingEventsStrip';
-import { ArticleReaderProvider, useOpenArticle } from './ArticleReader';
+import { ArticleReaderProvider } from './ArticleReader';
 import { FeedBlock, FeedSession } from './feed';
 import { colors } from './constants/colors';
-
-function timeAgo(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const hrs = Math.floor(diff / (1000 * 60 * 60));
-  if (hrs < 1) return 'just now';
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
-}
-
-function FeaturedNewsCard({ article, tag }: { article: Article; tag?: string }) {
-  const openArticle = useOpenArticle();
-  return (
-    <TouchableOpacity
-      style={styles.featuredNewsCard}
-      activeOpacity={0.8}
-      onPress={() => openArticle(article.url, article.title)}
-    >
-      {article.urlToImage ? (
-        <Image
-          source={{ uri: article.urlToImage }}
-          style={styles.featuredImage}
-          resizeMode="cover"
-        />
-      ) : (
-        <View style={[styles.featuredImage, { backgroundColor: colors.midNavy }]} />
-      )}
-      <View style={{ padding: 12 }}>
-        {tag ? <Text style={styles.tagLabel}>{tag}</Text> : null}
-        <Text style={styles.featuredTitle}>{article.title}</Text>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
-          <Text style={styles.cardMeta}>
-            {article.source?.name} · {timeAgo(article.publishedAt)}
-          </Text>
-          <Ionicons name="share-outline" size={16} color={colors.coolGrey} />
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-}
 
 function CaughtUpCard() {
   return (

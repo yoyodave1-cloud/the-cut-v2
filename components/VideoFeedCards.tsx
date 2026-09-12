@@ -36,21 +36,47 @@ export function FeaturedVideoCard({
   video,
   tag,
   subTopic,
+  videoTitle,
+  summary,
+  youtubeVideoId,
+  creatorName,
+  creatorAvatarUrl,
+  publishedAt,
+  viewCount,
 }: {
-  video: VideoItem;
+  video?: VideoItem;
   tag?: string;
   subTopic?: string;
+  videoTitle?: string;
+  summary?: string;
+  youtubeVideoId?: string;
+  creatorName?: string;
+  creatorHandle?: string;
+  creatorAvatarUrl?: string;
+  publishedAt?: string;
+  viewCount?: number;
 }) {
-  const thumb = videoThumbnailUri(video);
-  const hasPublishedAt = Boolean(String(video.publishedAt ?? '').trim());
+  const resolved: VideoItem = video ?? {
+    videoId: youtubeVideoId ?? '',
+    title: videoTitle ?? '',
+    summary,
+    publishedAt: publishedAt ?? '',
+    viewCount,
+    creator: creatorName
+      ? { name: creatorName, avatarUrl: creatorAvatarUrl }
+      : undefined,
+  };
+  if (!resolved.videoId) return null;
+  const thumb = videoThumbnailUri(resolved);
+  const hasPublishedAt = Boolean(String(resolved.publishedAt ?? '').trim());
   const metaDetail = hasPublishedAt
-    ? formatVideoTimeAgo(video.publishedAt)
+    ? formatVideoTimeAgo(resolved.publishedAt)
     : (subTopic ?? '').trim();
   return (
     <TouchableOpacity
       style={styles.featuredVideoCard}
       activeOpacity={0.8}
-      onPress={() => openYouTubeVideo(video.videoId)}
+      onPress={() => openYouTubeVideo(resolved.videoId)}
     >
       <View>
         <Image
@@ -66,10 +92,10 @@ export function FeaturedVideoCard({
       <View style={{ padding: 12 }}>
         {tag ? <Text style={styles.tagLabel}>{tag}</Text> : null}
         <Text style={styles.cardTitleLarge} numberOfLines={2}>
-          {video.title}
+          {resolved.title}
         </Text>
         <Text style={styles.cardMeta}>
-          {video.creator?.name || 'Creator'} · {metaDetail}
+          {resolved.creator?.name || 'Creator'} · {metaDetail}
         </Text>
       </View>
     </TouchableOpacity>

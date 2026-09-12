@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Linking } from 'react-native';
 import { articleMatchesCreatorNews, filterCreatorTaggedNews, normalizeNewsTitleKey } from './lib/creatorNewsFilter';
 
@@ -922,4 +923,99 @@ export async function fetchTopShorts(
   const res = await fetch(`${API_BASE}/top-shorts?${params}`);
   if (!res.ok) throw new Error(`top-shorts failed (${res.status})`);
   return normalizeVideoList(await res.json());
+}
+
+export type FeaturedCardType = 'large_news' | 'featured_video';
+
+export type FeaturedSectionSlice = {
+  subtitle: string;
+  cardType: FeaturedCardType;
+  card: Record<string, unknown>;
+};
+
+export type FeaturedSectionsResponse = {
+  tour: FeaturedSectionSlice | null;
+  creator: FeaturedSectionSlice | null;
+};
+
+const FEATURED_SECTIONS_CLIENT_TTL_MS = 60 * 1000;
+let featuredSectionsCache: { payload: FeaturedSectionsResponse; fetchedAt: number } | null =
+  null;
+let featuredSectionsInflight: Promise<FeaturedSectionsResponse> | null = null;
+
+function parseFeaturedSlice(raw: unknown): FeaturedSectionSlice | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as {
+    subtitle?: unknown;
+    cardType?: unknown;
+    card_type?: unknown;
+    card?: unknown;
+  };
+  const cardType =
+    row.cardType === 'large_news' || row.card_type === 'large_news'
+      ? 'large_news'
+      : row.cardType === 'featured_video' || row.card_type === 'featured_video'
+        ? 'featured_video'
+        : null;
+  if (!cardType) return null;
+  const card =
+    row.card && typeof row.card === 'object' ? (row.card as Record<string, unknown>) : {};
+  return {
+    subtitle: typeof row.subtitle === 'string' ? row.subtitle : '',
+    cardType,
+    card,
+  };
+}
+
+async function requestFeaturedSections(): Promise<FeaturedSectionsResponse> {
+  const empty: FeaturedSectionsResponse = { tour: null, creator: null };
+  try {
+    const res = await fetch(`${API_BASE}/featured-sections`);
+    if (!res.ok) return empty;
+    const json = (await res.json()) as { tour?: unknown; creator?: unknown };
+    const payload: FeaturedSectionsResponse = {
+      tour: parseFeaturedSlice(json.tour),
+      creator: parseFeaturedSlice(json.creator),
+    };
+    featuredSectionsCache = { payload, fetchedAt: Date.now() };
+    return payload;
+  } catch {
+    return empty;
+  }
+}
+
+export async function fetchFeaturedSections(): Promise<FeaturedSectionsResponse> {
+  if (
+    featuredSectionsCache &&
+    Date.now() - featuredSectionsCache.fetchedAt < FEATURED_SECTIONS_CLIENT_TTL_MS
+  ) {
+    return featuredSectionsCache.payload;
+  }
+  if (!featuredSectionsInflight) {
+    featuredSectionsInflight = requestFeaturedSections().finally(() => {
+      featuredSectionsInflight = null;
+    });
+  }
+  return featuredSectionsInflight;
+}
+
+const EMPTY_FEATURED_SECTIONS: FeaturedSectionsResponse = { tour: null, creator: null };
+
+/** Shared by Featured Tour and Featured Creator so Home only hits /featured-sections once. */
+export function useFeaturedSections(): FeaturedSectionsResponse {
+  const [payload, setPayload] = useState<FeaturedSectionsResponse>(
+    featuredSectionsCache?.payload ?? EMPTY_FEATURED_SECTIONS,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchFeaturedSections().then((next) => {
+      if (!cancelled) setPayload(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return payload;
 }

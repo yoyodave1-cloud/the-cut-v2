@@ -2,6 +2,37 @@
 
 Patches in this folder integrate with the shared Railway API (`the-cut/backend/server.js`).
 
+## Hot Right Now (live in server.js)
+
+`GET /hot-right-now`
+
+Ranks long-form `creator_videos` by view velocity over the last 14 days.
+
+**Creator-only:** rows whose `creators.type` is `tour` or `media` are excluded **before** the top-N slice. Home section 3 and the Creators page `HotRightNowCard` share this endpoint (and the Remotion section-post render calls it with no extra filter), so one backend change covers all three.
+
+Optional `?types=competitive,instruction,podcast` still narrows the independent pool. `tour` / `media` in that param are ignored.
+
+Typical independent pool (production check, 2026-09-08): 50 ranked independent videos available at `?types=competitive,instruction,podcast&limit=50` (34 competitive / 13 instruction / 3 podcast). Unfiltered top 50 was 24 competitive / 13 tour / 9 instruction / 3 media / 1 podcast — excluding tour/media does not underfill a top-10.
+
+`filterIndependentCreators.js` (Social Media Daily Creator Carousel) applies the same type lists as a **post-fetch** filter. It is not used here: applying it after ranking would drop tour/media rows from an already-sliced top-10 and could underfill. The backend exclude runs before slice, matching that util's allowed/excluded types (`competitive | instruction | podcast | personality` vs `tour | media`).
+
+## Featured Tour / Featured Creator (live in server.js)
+
+`GET /featured-sections`
+
+Returns the active homepage slices from Supabase `featured_sections`:
+
+```json
+{ "tour": { "subtitle": "...", "cardType": "large_news", "card": {} } | null, "creator": { ... } | null }
+```
+
+Each key is `null` when no `is_active` row exists (or on DB error). In-memory cache TTL is 3 minutes. Registered via `patches/featured-sections.js`.
+
+```js
+const { registerFeaturedSectionsRoutes } = require('./patches/featured-sections');
+registerFeaturedSectionsRoutes(app, supabase);
+```
+
 ## Creators top-100
 
 `patches/creators-top100.js` — `GET /creators/top100`

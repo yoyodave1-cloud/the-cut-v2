@@ -26,6 +26,7 @@ import {
   fetchNewsPage,
   fetchTourLatestVideosByCreatorName,
   todaysInstructionalTopic,
+  useFeaturedSections,
 } from '../api';
 import { ArticleReaderProvider } from '../ArticleReader';
 import HomeHeader from '../components/HomeHeader';
@@ -35,6 +36,8 @@ import TornDivider from '../components/TornDivider';
 import HotRightNowCard from '../components/cards/HotRightNowCard';
 import { NewsCardCompact } from '../components/FeedNewsCards';
 import FeaturedPodcastCard from '../components/FeaturedPodcastCard';
+import FeaturedCreatorSection from '../components/FeaturedCreatorSection';
+import FeaturedTourSection from '../components/FeaturedTourSection';
 import { MasterclassVideoCard } from '../components/ShortGameMasterclass';
 import {
   FeaturedVideoCard,
@@ -230,6 +233,26 @@ function IntroSection() {
         </Text>
       </View>
     </SectionShell>
+  );
+}
+
+function FeaturedTourSlot({ tornVariant }: { tornVariant: number }) {
+  const { tour } = useFeaturedSections();
+  if (!tour) return null;
+  return (
+    <HomeSection scheme="light" tornVariant={tornVariant}>
+      <FeaturedTourSection />
+    </HomeSection>
+  );
+}
+
+function FeaturedCreatorSlot({ tornVariant }: { tornVariant: number }) {
+  const { creator } = useFeaturedSections();
+  if (!creator) return null;
+  return (
+    <HomeSection scheme="dark" tornVariant={tornVariant}>
+      <FeaturedCreatorSection />
+    </HomeSection>
   );
 }
 
@@ -517,6 +540,9 @@ function HomeTabBody() {
             <SeeAllLink label="See all trending →" scheme="dark" onPress={goCreators} />
           </View>
         </HomeSection>
+
+        <FeaturedTourSlot tornVariant={8} />
+        <FeaturedCreatorSlot tornVariant={9} />
 
         <TourGolfBlock
           subtitle="DP World Tour"
