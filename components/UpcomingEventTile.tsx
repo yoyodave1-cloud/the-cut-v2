@@ -37,6 +37,7 @@ const styles = StyleSheet.create({
     width: EVENT_TILE_WIDTH,
     alignItems: 'center',
     marginRight: 10,
+    overflow: 'visible',
   },
   tourLabel: {
     fontSize: 12,

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -9,11 +9,13 @@ import {
   TouchableOpacity,
   View,
   type StyleProp,
+  type TextStyle,
   type ViewStyle,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { ClipPath, Defs, G, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import {
   Article,
   DailyInstructionalSelection,
@@ -30,7 +32,8 @@ import {
 } from '../api';
 import { ArticleReaderProvider } from '../ArticleReader';
 import HomeHeader from '../components/HomeHeader';
-import SectionGlow from '../components/SectionGlow';
+import HomeTourEventsStrip from '../components/HomeTourEventsStrip';
+import SectionGlow, { SectionGlowPaint, type SectionGlowVariant } from '../components/SectionGlow';
 import SectionTitle from '../components/SectionTitle';
 import TornDivider from '../components/TornDivider';
 import HotRightNowCard from '../components/cards/HotRightNowCard';
@@ -104,6 +107,132 @@ function PulseDot() {
   return <Animated.View style={[styles.eyebrowDot, { opacity }]} />;
 }
 
+/** Depth of the smooth top arc, in px at the sides. Center of the curve is y=0. */
+const HERO_CURVE_H = 44;
+/** Fraction of the video height covered by the bottom navy fade into the torn seam. */
+const HERO_FADE_FRACTION = 0.72;
+/** Visible solid navy between the video fade and the ripped-paper edge. */
+const HERO_NAVY_BUFFER = 28;
+const TORN_DIVIDER_H = 34;
+const INTRO_PAD_TOP = 56;
+
+type HeadlineToken = { text: string; color: string };
+type HeadlineTier = 'lead' | 'mid' | 'hero' | 'tail';
+type HeadlineLine = { tokens: HeadlineToken[]; tier: HeadlineTier };
+
+const HEADLINE_LINES: HeadlineLine[] = [
+  { tier: 'lead', tokens: [{ text: 'Golf media', color: colors.liveBlue }] },
+  { tier: 'lead', tokens: [{ text: 'picked a side,', color: '#FFFFFF' }] },
+  {
+    tier: 'mid',
+    tokens: [
+      { text: 'the fans ', color: '#FFFFFF' },
+      { text: 'never', color: colors.liveBlue },
+      { text: ' did,', color: '#FFFFFF' },
+    ],
+  },
+  { tier: 'hero', tokens: [{ text: 'one app', color: colors.liveBlue }] },
+  { tier: 'tail', tokens: [{ text: 'for all golf.', color: '#FFFFFF' }] },
+];
+
+const HEADLINE_SCALE = {
+  allowFontScaling: false as const,
+  maxFontSizeMultiplier: 1,
+};
+
+function headlineStyleFor(tier: HeadlineTier) {
+  switch (tier) {
+    case 'hero':
+      return styles.oversizeHero;
+    case 'mid':
+      return styles.oversizeMid;
+    case 'tail':
+      return styles.oversizeTail;
+    default:
+      return styles.oversizeLead;
+  }
+}
+
+function FittedHeadlineLine({
+  tokens,
+  baseStyle,
+  minSize = 18,
+}: {
+  tokens: HeadlineToken[];
+  baseStyle: TextStyle;
+  minSize?: number;
+}) {
+  const flat = StyleSheet.flatten(baseStyle);
+  const startSize = typeof flat.fontSize === 'number' ? flat.fontSize : 35;
+  const lhRatio =
+    typeof flat.lineHeight === 'number' && startSize > 0 ? flat.lineHeight / startSize : 1.12;
+  const [fontSize, setFontSize] = useState(startSize);
+  const locked = useRef(false);
+
+  const sizedStyle: TextStyle = {
+    ...flat,
+    fontSize,
+    lineHeight: Math.round(fontSize * lhRatio),
+  };
+
+  return (
+    <Text
+      {...HEADLINE_SCALE}
+      style={[sizedStyle, styles.headlineLine]}
+      onTextLayout={(event) => {
+        if (locked.current) return;
+        const lineCount = event.nativeEvent.lines.length;
+        if (lineCount === 0) return;
+        if (lineCount > 1 && fontSize > minSize) {
+          setFontSize((size) => size - 1);
+          return;
+        }
+        locked.current = true;
+      }}
+    >
+      {tokens.map((token, tokenIndex) => (
+        <Text key={tokenIndex} {...HEADLINE_SCALE} style={[sizedStyle, { color: token.color }]}>
+          {token.text}
+        </Text>
+      ))}
+    </Text>
+  );
+}
+
+function IntroHeadline() {
+  return (
+    <View style={styles.headlineBlock}>
+      {HEADLINE_LINES.map((line, lineIndex) => {
+        const lineStyle = headlineStyleFor(line.tier);
+        if (line.tier === 'mid' || line.tier === 'hero') {
+          return (
+            <FittedHeadlineLine
+              key={lineIndex}
+              tokens={line.tokens}
+              baseStyle={lineStyle}
+              minSize={line.tier === 'hero' ? 36 : 18}
+            />
+          );
+        }
+        return (
+          <Text key={lineIndex} {...HEADLINE_SCALE} style={[lineStyle, styles.headlineLine]}>
+            {line.tokens.map((token, tokenIndex) => (
+              <Text key={tokenIndex} {...HEADLINE_SCALE} style={[lineStyle, { color: token.color }]}>
+                {token.text}
+              </Text>
+            ))}
+          </Text>
+        );
+      })}
+      <View style={styles.rockSaltWrap}>
+        <Text {...HEADLINE_SCALE} style={styles.rockSaltAccent}>
+          Tour Vs Creator
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 function HeroReel() {
   const player = useVideoPlayer(heroReel, (p) => {
     p.loop = true;
@@ -116,22 +245,100 @@ function HeroReel() {
       player={player}
       style={styles.heroVideo}
       contentFit="cover"
-      nativeControls
+      nativeControls={false}
     />
   );
 }
 
-const TORN_DIVIDER_H = 34;
+function IntroHeroVideo({ glowOffsetY }: { glowOffsetY: number }) {
+  const reactId = useId().replace(/[^a-zA-Z0-9]/g, '');
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  const fadeH = Math.round(size.height * HERO_FADE_FRACTION);
+  const capClipId = `heroCap-${reactId}`;
+  const capPath =
+    size.width > 0
+      ? `M0 0 H${size.width} V${HERO_CURVE_H} Q${size.width / 2} 0 0 ${HERO_CURVE_H} Z`
+      : '';
+  const glowWidth = size.width;
+  const glowHeight = glowOffsetY + size.height + HERO_NAVY_BUFFER + TORN_DIVIDER_H;
+
+  return (
+    <View collapsable={false} style={styles.heroBleed}>
+      <View
+        collapsable={false}
+        style={styles.heroVideoWrap}
+        onLayout={({ nativeEvent }: LayoutChangeEvent) => {
+          const { width, height } = nativeEvent.layout;
+          if (width <= 0 || height <= 0) return;
+          setSize((prev) =>
+            prev.width === width && prev.height === height ? prev : { width, height },
+          );
+        }}
+      >
+        <HeroReel />
+        {size.width > 0 ? (
+          <>
+            <Svg
+              width={size.width}
+              height={HERO_CURVE_H}
+              style={styles.heroCurveSvg}
+              pointerEvents="none"
+            >
+              <Defs>
+                <ClipPath id={capClipId}>
+                  <Path d={capPath} />
+                </ClipPath>
+              </Defs>
+              <G clipPath={`url(#${capClipId})`}>
+                <Rect width={size.width} height={HERO_CURVE_H} fill={colors.navy} />
+                {glowWidth > 0 && glowHeight > 0 ? (
+                  <G transform={`translate(0, ${-glowOffsetY})`}>
+                    <SectionGlowPaint
+                      scheme="dark"
+                      width={glowWidth}
+                      height={glowHeight}
+                      variant="intro"
+                      idPrefix={`heroGlow-${reactId}`}
+                    />
+                  </G>
+                ) : null}
+              </G>
+            </Svg>
+            <Svg
+              width={size.width}
+              height={fadeH}
+              style={styles.heroFadeSvg}
+              pointerEvents="none"
+            >
+              <Defs>
+                <LinearGradient id={`heroFade-${reactId}`} x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0%" stopColor={colors.navy} stopOpacity="0" />
+                  <Stop offset="25%" stopColor={colors.navy} stopOpacity="0.38" />
+                  <Stop offset="58%" stopColor={colors.navy} stopOpacity="0.78" />
+                  <Stop offset="100%" stopColor={colors.navy} stopOpacity="0.94" />
+                </LinearGradient>
+              </Defs>
+              <Rect width={size.width} height={fadeH} fill={`url(#heroFade-${reactId})`} />
+            </Svg>
+          </>
+        ) : null}
+      </View>
+      <View style={styles.heroNavyBuffer} />
+    </View>
+  );
+}
 
 function SectionShell({
   scheme,
   style,
   tornVariant,
+  glowVariant = 'default',
   children,
 }: {
   scheme: 'light' | 'dark';
   style: StyleProp<ViewStyle>;
   tornVariant?: number;
+  glowVariant?: SectionGlowVariant;
   children: React.ReactNode;
 }) {
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -145,7 +352,8 @@ function SectionShell({
     });
   };
 
-  const glowH = Math.max(0, size.height - TORN_DIVIDER_H);
+  const glowH =
+    glowVariant === 'intro' ? size.height : Math.max(0, size.height - TORN_DIVIDER_H);
 
   return (
     <View
@@ -178,7 +386,12 @@ function SectionShell({
             overflow: 'hidden',
           }}
         >
-          <SectionGlow scheme={scheme} width={size.width} height={glowH} />
+          <SectionGlow
+            scheme={scheme}
+            width={size.width}
+            height={glowH}
+            variant={glowVariant}
+          />
         </View>
       ) : null}
       <View
@@ -216,22 +429,25 @@ function HomeSection({
 }
 
 function IntroSection() {
+  const [copyBottom, setCopyBottom] = useState(0);
+
   return (
-    <SectionShell scheme="dark" style={styles.introSection}>
-      <View style={styles.eyebrowWrap}>
-        <View style={styles.eyebrow}>
-          <PulseDot />
-          <Text style={styles.eyebrowText}>Welcome to The Cut</Text>
+    <SectionShell scheme="dark" style={styles.introSection} glowVariant="intro">
+      <View
+        onLayout={({ nativeEvent }: LayoutChangeEvent) => {
+          const bottom = INTRO_PAD_TOP + nativeEvent.layout.height;
+          setCopyBottom((prev) => (prev === bottom ? prev : bottom));
+        }}
+      >
+        <View style={styles.eyebrowWrap}>
+          <View style={styles.eyebrow}>
+            <PulseDot />
+            <Text style={styles.eyebrowText}>Welcome to The Cut</Text>
+          </View>
         </View>
+        <IntroHeadline />
       </View>
-      <Text style={styles.oversize}>{`Sunday golf,\nMonday golf,\none app.`}</Text>
-      <Text style={styles.rockSaltAccent}>Tour Vs Creator</Text>
-      <View style={styles.videoBox}>
-        <HeroReel />
-        <Text style={styles.videoCaption}>
-          Golf media picked a side, the fans never did. One app for all golf.
-        </Text>
-      </View>
+      <IntroHeroVideo key="intro-hero-curve-v4" glowOffsetY={copyBottom} />
     </SectionShell>
   );
 }
@@ -279,6 +495,7 @@ function TourGolfBlock({
   seeAllLabel,
   onSeeAll,
   tornVariant,
+  eventStripTour,
 }: {
   subtitle: string;
   videos: VideoItem[];
@@ -286,10 +503,23 @@ function TourGolfBlock({
   seeAllLabel: string;
   onSeeAll: () => void;
   tornVariant: number;
+  eventStripTour?: string;
 }) {
   return (
     <HomeSection scheme="light" tornVariant={tornVariant}>
-      <SectionTitle subtitle={subtitle} big="Tour" small="golf" scheme="light" />
+      <SectionTitle
+        subtitle={subtitle}
+        big="Tour"
+        small="golf"
+        scheme="light"
+        trailing={
+          eventStripTour
+            ? (availableWidth) => (
+                <HomeTourEventsStrip tourTitle={eventStripTour} availableWidth={availableWidth} />
+              )
+            : undefined
+        }
+      />
       {videos.length > 0 ? (
         <View style={styles.carouselWrap}>
           <VideoCarousel videos={videos} />
@@ -520,6 +750,8 @@ function HomeTabBody() {
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={{ paddingBottom: insets.bottom + 8 }}
+        contentInsetAdjustmentBehavior="never"
+        automaticallyAdjustContentInsets={false}
         showsVerticalScrollIndicator={false}
       >
         <IntroSection />
@@ -531,6 +763,7 @@ function HomeTabBody() {
           seeAllLabel="See all PGA Tour news →"
           onSeeAll={goTour}
           tornVariant={0}
+          eventStripTour="PGA Tour"
         />
 
         <HomeSection scheme="dark" tornVariant={1}>
@@ -551,6 +784,7 @@ function HomeTabBody() {
           seeAllLabel="See all DP World Tour news →"
           onSeeAll={goTour}
           tornVariant={2}
+          eventStripTour="DP World Tour"
         />
 
         <CreatorGolfBlock
@@ -570,6 +804,7 @@ function HomeTabBody() {
           seeAllLabel="See all LPGA news →"
           onSeeAll={goTour}
           tornVariant={4}
+          eventStripTour="LPGA"
         />
 
         <CreatorGolfBlock
@@ -622,7 +857,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.navy,
     overflow: 'visible',
     paddingHorizontal: 24,
-    paddingTop: 56,
+    paddingTop: INTRO_PAD_TOP,
     paddingBottom: 90,
   },
   lightSection: {
@@ -668,43 +903,101 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     color: '#9EEFFB',
   },
-  oversize: {
+  headlineBlock: {
+    alignSelf: 'stretch',
+  },
+  headlineLine: {
+    width: '100%',
+    textAlign: 'center',
+  },
+  oversizeLead: {
     fontFamily: 'BricolageGrotesque_800ExtraBold',
-    fontSize: 42,
+    fontSize: 35,
     lineHeight: 39,
-    letterSpacing: -1.26,
+    letterSpacing: -1.6,
     textTransform: 'uppercase',
     color: '#FFFFFF',
     textAlign: 'center',
+    includeFontPadding: false,
+  },
+  oversizeMid: {
+    fontFamily: 'BricolageGrotesque_800ExtraBold',
+    fontSize: 35,
+    lineHeight: 39,
+    letterSpacing: -1.6,
+    textTransform: 'uppercase',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    includeFontPadding: false,
+  },
+  oversizeHero: {
+    fontFamily: 'BricolageGrotesque_800ExtraBold',
+    fontSize: 46,
+    lineHeight: 50,
+    letterSpacing: -1.8,
+    textTransform: 'uppercase',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    includeFontPadding: false,
+  },
+  oversizeTail: {
+    fontFamily: 'BricolageGrotesque_800ExtraBold',
+    fontSize: 26,
+    lineHeight: 30,
+    letterSpacing: -0.8,
+    textTransform: 'uppercase',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    includeFontPadding: false,
+  },
+  rockSaltWrap: {
+    marginTop: 8,
+    paddingTop: 14,
+    paddingBottom: 10,
+    overflow: 'visible',
+    zIndex: 4,
   },
   rockSaltAccent: {
     fontFamily: 'RockSalt_400Regular',
     fontSize: 26,
+    lineHeight: 48,
     color: colors.voltCyan,
     textAlign: 'center',
-    marginTop: 18,
+    overflow: 'visible',
     transform: [{ rotate: '-2deg' }],
   },
-  videoBox: {
-    marginTop: 28,
-    borderRadius: 14,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(138,155,176,0.25)',
-    backgroundColor: 'rgba(26,46,74,0.6)',
+  heroBleed: {
+    marginHorizontal: -24,
+    marginTop: 0,
+    marginBottom: -90,
+    backgroundColor: 'transparent',
+  },
+  heroVideoWrap: {
+    position: 'relative',
+    backgroundColor: 'transparent',
   },
   heroVideo: {
     width: '100%',
     aspectRatio: 16 / 9,
-    backgroundColor: colors.midNavy,
+    backgroundColor: colors.navy,
   },
-  videoCaption: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13.5,
-    lineHeight: 20,
-    color: '#C6D2E0',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+  heroNavyBuffer: {
+    height: HERO_NAVY_BUFFER + TORN_DIVIDER_H,
+    backgroundColor: colors.navy,
+  },
+  heroCurveSvg: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    zIndex: 2,
+    elevation: 2,
+  },
+  heroFadeSvg: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    zIndex: 2,
+    elevation: 2,
   },
   carouselWrap: { marginTop: 22 },
   instructionalTopic: {

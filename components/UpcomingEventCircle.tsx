@@ -4,9 +4,7 @@ import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { colors } from '../constants/colors';
 
 export const EVENT_CIRCLE_SIZE = 90;
-const RING_INSET = 5;
-const RING_SIZE = EVENT_CIRCLE_SIZE + RING_INSET * 2;
-const RING_STROKE = 2.5;
+const DEFAULT_RING_INSET = 5;
 const LIVE_ACCENT = colors.bogeyRed;
 const ROTATION_MS = 2600;
 
@@ -14,9 +12,21 @@ type UpcomingEventCircleProps = {
   borderColor: string;
   label: string;
   live: boolean;
+  size?: number;
+  ringInset?: number;
+  /** Caption spacing under the tour-page tile. Home inline uses 0. */
+  marginBottom?: number;
 };
 
-function LiveGlowRing({ gradientId }: { gradientId: string }) {
+function LiveGlowRing({
+  gradientId,
+  ringSize,
+  stroke,
+}: {
+  gradientId: string;
+  ringSize: number;
+  stroke: number;
+}) {
   const spin = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -37,7 +47,7 @@ function LiveGlowRing({ gradientId }: { gradientId: string }) {
     outputRange: ['0deg', '360deg'],
   });
 
-  const radius = (RING_SIZE - RING_STROKE) / 2;
+  const radius = (ringSize - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
   const arcLength = circumference * 0.28;
 
@@ -47,13 +57,13 @@ function LiveGlowRing({ gradientId }: { gradientId: string }) {
       style={[
         styles.ringLayer,
         {
-          width: RING_SIZE,
-          height: RING_SIZE,
+          width: ringSize,
+          height: ringSize,
           transform: [{ rotate }],
         },
       ]}
     >
-      <Svg width={RING_SIZE} height={RING_SIZE}>
+      <Svg width={ringSize} height={ringSize}>
         <Defs>
           <LinearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
             <Stop offset="0%" stopColor={LIVE_ACCENT} stopOpacity="1" />
@@ -62,11 +72,11 @@ function LiveGlowRing({ gradientId }: { gradientId: string }) {
           </LinearGradient>
         </Defs>
         <Circle
-          cx={RING_SIZE / 2}
-          cy={RING_SIZE / 2}
+          cx={ringSize / 2}
+          cy={ringSize / 2}
           r={radius}
           stroke={`url(#${gradientId})`}
-          strokeWidth={RING_STROKE}
+          strokeWidth={stroke}
           fill="none"
           strokeLinecap="round"
           strokeDasharray={`${arcLength} ${circumference - arcLength}`}
@@ -80,18 +90,44 @@ export default function UpcomingEventCircle({
   borderColor,
   label,
   live,
+  size = EVENT_CIRCLE_SIZE,
+  ringInset = DEFAULT_RING_INSET,
+  marginBottom = 6,
 }: UpcomingEventCircleProps) {
   const gradientId = useId().replace(/:/g, '');
+  const ringSize = size + ringInset * 2;
+  const compact = size < EVENT_CIRCLE_SIZE;
+  const stroke = compact ? 2 : 2.5;
+  const fontSize = compact ? 10 : 15;
+  const badgePadH = compact ? 4 : 5;
+  const badgePadV = compact ? 1 : 2;
+  const badgeFont = compact ? 7 : 8;
 
   return (
-    <View style={styles.wrap}>
-      {live ? <LiveGlowRing gradientId={gradientId} /> : null}
-      <View style={[styles.circle, { borderColor }]}>
-        <Text style={styles.circleText}>{label}</Text>
+    <View style={[styles.wrap, { width: ringSize, height: ringSize, marginBottom }]}>
+      {live ? <LiveGlowRing gradientId={gradientId} ringSize={ringSize} stroke={stroke} /> : null}
+      <View
+        style={[
+          styles.circle,
+          {
+            borderColor,
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            borderWidth: compact ? 1.5 : 2,
+          },
+        ]}
+      >
+        <Text style={[styles.circleText, { fontSize }]}>{label}</Text>
       </View>
       {live ? (
-        <View style={styles.liveBadge}>
-          <Text style={styles.liveBadgeText}>LIVE</Text>
+        <View
+          style={[
+            styles.liveBadge,
+            { paddingHorizontal: badgePadH, paddingVertical: badgePadV },
+          ]}
+        >
+          <Text style={[styles.liveBadgeText, { fontSize: badgeFont }]}>LIVE</Text>
         </View>
       ) : null}
     </View>
@@ -100,11 +136,9 @@ export default function UpcomingEventCircle({
 
 const styles = StyleSheet.create({
   wrap: {
-    width: RING_SIZE,
-    height: RING_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
+    overflow: 'visible',
   },
   ringLayer: {
     position: 'absolute',
@@ -112,16 +146,11 @@ const styles = StyleSheet.create({
     left: 0,
   },
   circle: {
-    width: EVENT_CIRCLE_SIZE,
-    height: EVENT_CIRCLE_SIZE,
-    borderRadius: EVENT_CIRCLE_SIZE / 2,
-    borderWidth: 2,
     backgroundColor: colors.card,
     alignItems: 'center',
     justifyContent: 'center',
   },
   circleText: {
-    fontSize: 15,
     fontWeight: '600',
     color: colors.navy,
     textAlign: 'center',
@@ -132,11 +161,8 @@ const styles = StyleSheet.create({
     right: 2,
     backgroundColor: LIVE_ACCENT,
     borderRadius: 6,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
   },
   liveBadgeText: {
-    fontSize: 8,
     fontWeight: '700',
     color: '#FFFFFF',
     letterSpacing: 0.4,

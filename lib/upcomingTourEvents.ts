@@ -114,6 +114,95 @@ export function upcomingEventScrollTargetIndex(
   return upcomingEventCurrentOrNextIndex(events, today);
 }
 
+function toUpcomingTourEvent(
+  event: TourSeasonEvent,
+  tour: (typeof TOUR_CONFIGS)[number],
+): UpcomingTourEvent {
+  const dated = withEndDate(event);
+  return {
+    ...dated,
+    tourId: tour.id,
+    tourTitle: tour.title,
+    tourShort: tour.short,
+    tourAccent: tour.accent,
+    genericLeaderboardUrl: tour.genericLeaderboardUrl,
+  };
+}
+
+export function getTourScheduleEvents(tourTitle: string): UpcomingTourEvent[] {
+  const tour = TOUR_CONFIGS.find((item) => item.title === tourTitle);
+  if (!tour) return [];
+  return getTourScheduleForTitle(tour.title).map((event) => toUpcomingTourEvent(event, tour));
+}
+
+/**
+ * Live event this week for a tour, or the next start date on or after today.
+ * Uses the same curated schedule as that tour's season timeline.
+ */
+export function getHomeTourHeaderEvent(
+  tourTitle: string,
+  today: Date = new Date(),
+): UpcomingTourEvent | null {
+  const schedule = getTourScheduleEvents(tourTitle);
+  if (schedule.length === 0) return null;
+
+  const live = schedule.find((event) => isEventLive(event, today));
+  if (live) return live;
+
+  const todayStr = calendarDateStringFromLocal(today);
+  return schedule.find((event) => event.startDate >= todayStr) ?? null;
+}
+
+/**
+ * Home header inline strip. Viewport is computed from the measured title row
+ * (see homeTourStripLayout). Max = one 110px timeline tile + gap + peek.
+ */
+export const HOME_INLINE_PEEK = 22;
+export const HOME_INLINE_SAFETY = 4;
+export const HOME_TITLE_TRAILING_GAP = 10;
+export const HOME_INLINE_MAX_VIEWPORT =
+  EVENT_TILE_WIDTH + EVENT_TILE_GAP + HOME_INLINE_PEEK;
+export const HOME_INLINE_BADGE_PAD = 4;
+/** 90px circle + 5px ring inset each side. Keep in sync with UpcomingEventCircle defaults. */
+export const HOME_INLINE_CIRCLE_WRAP = 100;
+/** Strip padding + circle wrap — the band the title block is centered against. */
+export const HOME_INLINE_CIRCLE_BAND = HOME_INLINE_BADGE_PAD + HOME_INLINE_CIRCLE_WRAP;
+
+export type HomeTourStripLayout = {
+  viewport: number;
+  peek: number;
+  shortfall: number;
+};
+
+/**
+ * Size the Home inline strip from leftover row width after the title.
+ * Trims the following-event peek toward 0 before anything else. Never shrinks
+ * the 90px tile. shortfall > 0 means even peek 0 does not fit.
+ */
+export function homeTourStripLayout(availableWidth: number): HomeTourStripLayout {
+  const tile = EVENT_TILE_WIDTH;
+  const gap = EVENT_TILE_GAP;
+  const maxPeek = HOME_INLINE_PEEK;
+  const maxViewport = tile + gap + maxPeek;
+
+  if (!Number.isFinite(availableWidth) || availableWidth <= 0) {
+    return { viewport: maxViewport, peek: maxPeek, shortfall: 0 };
+  }
+
+  const budget = Math.max(0, availableWidth - HOME_INLINE_SAFETY);
+
+  if (budget >= maxViewport) {
+    return { viewport: maxViewport, peek: maxPeek, shortfall: 0 };
+  }
+  if (budget >= tile + gap) {
+    return { viewport: budget, peek: budget - tile - gap, shortfall: 0 };
+  }
+  if (budget >= tile) {
+    return { viewport: tile, peek: 0, shortfall: 0 };
+  }
+  return { viewport: tile, peek: 0, shortfall: tile - budget };
+}
+
 function eventYear(event: Pick<TourSeasonEvent, 'startDate'>): string {
   return event.startDate.slice(0, 4);
 }

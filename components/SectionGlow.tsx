@@ -5,6 +5,16 @@ import { colors } from '../constants/colors';
 
 type WashTone = 'cyan' | 'violet';
 
+type WashLayout = {
+  tone: WashTone;
+  widthRatio: number;
+  heightRatio: number;
+  leftRatio: number;
+  topRatio: number;
+};
+
+export type SectionGlowVariant = 'default' | 'intro';
+
 type Stops = { offset: string; color: string; opacity: number }[];
 
 /**
@@ -37,15 +47,15 @@ const TONES: Record<WashTone, Stops> = {
  * Heights are kept short enough that both ramps reach their last visible stop by ~80% of the
  * section, leaving the torn divider below in clear air.
  */
-const WASHES: {
-  tone: WashTone;
-  widthRatio: number;
-  heightRatio: number;
-  leftRatio: number;
-  topRatio: number;
-}[] = [
+const WASHES: WashLayout[] = [
   { tone: 'cyan', widthRatio: 1.9, heightRatio: 1.2, leftRatio: -0.75, topRatio: -0.32 },
   { tone: 'violet', widthRatio: 1.85, heightRatio: 1.05, leftRatio: -0.1, topRatio: -0.17 },
+];
+
+/** Taller, lower washes so Home intro glow still covers the headline block and meets the video arc. */
+const INTRO_WASHES: WashLayout[] = [
+  { tone: 'cyan', widthRatio: 1.9, heightRatio: 1.7, leftRatio: -0.75, topRatio: -0.08 },
+  { tone: 'violet', widthRatio: 1.85, heightRatio: 1.55, leftRatio: -0.1, topRatio: 0.04 },
 ];
 
 export function sectionGlowIntensity(scheme: 'light' | 'dark') {
@@ -58,15 +68,18 @@ export function SectionGlowPaint({
   width,
   height,
   idPrefix,
+  variant = 'default',
 }: {
   scheme: 'light' | 'dark';
   width: number;
   height: number;
   idPrefix: string;
+  variant?: SectionGlowVariant;
 }) {
+  const washes = variant === 'intro' ? INTRO_WASHES : WASHES;
   return (
     <G opacity={sectionGlowIntensity(scheme)}>
-      {WASHES.map((wash) => {
+      {washes.map((wash) => {
         const w = width * wash.widthRatio;
         const h = height * wash.heightRatio;
         const x = width * wash.leftRatio;
@@ -112,10 +125,12 @@ export default function SectionGlow({
   scheme,
   width,
   height,
+  variant = 'default',
 }: {
   scheme: 'light' | 'dark';
   width: number;
   height: number;
+  variant?: SectionGlowVariant;
 }) {
   const reactId = useId().replace(/[^a-zA-Z0-9]/g, '');
 
@@ -124,7 +139,13 @@ export default function SectionGlow({
   return (
     <View pointerEvents="none" style={[styles.layer, { width, height }]}>
       <Svg width={width} height={height}>
-        <SectionGlowPaint scheme={scheme} width={width} height={height} idPrefix={`sg-${reactId}`} />
+        <SectionGlowPaint
+          scheme={scheme}
+          width={width}
+          height={height}
+          variant={variant}
+          idPrefix={`sg-${reactId}`}
+        />
       </Svg>
     </View>
   );
