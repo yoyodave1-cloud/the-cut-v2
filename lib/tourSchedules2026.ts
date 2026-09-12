@@ -1,6 +1,6 @@
 /**
  * Static 2026 season schedules for tour pages.
- * Sources: PGA Tour / Sky Sports (FedEx season), DP World Tour / Golf News Net & europeantour.com,
+ * Sources: PGA Tour / Sky Sports (FedEx season + 2026 FedExCup Fall), DP World Tour / Golf News Net & europeantour.com,
  * LIV Golf / Wikipedia 2026 LIV Golf League, Korn Ferry Tour / PGA TOUR media release (Nov 2025),
  * LPGA Tour / Golf.com & LPGA 2026 schedule (33 events; majors: Chevron, U.S. Women’s Open, KPMG, Evian, AIG).
  * Men’s majors use app/session first-round dates: Masters 9 Apr, PGA 14 May, US Open 18 Jun, Open 16 Jul.
@@ -337,6 +337,70 @@ const PGA_TOUR_2026_FULL_SEASON: TourSeasonEvent[] = [
     shortName: ["TOUR", "CHAMP."],
     fullName: "Tour Championship",
     startDate: "2026-08-27",
+    isMajor: false,
+  },
+  {
+    id: "pga-2026-biltmore-championship",
+    shortName: ["BILTMORE", "ASHEV."],
+    fullName: "Biltmore Championship Asheville",
+    startDate: "2026-09-17",
+    isMajor: false,
+  },
+  {
+    id: "pga-2026-presidents-cup",
+    shortName: ["PRES.", "CUP"],
+    fullName: "Presidents Cup",
+    startDate: "2026-09-24",
+    endDate: "2026-09-27",
+    isMajor: false,
+  },
+  {
+    id: "pga-2026-bank-of-utah",
+    shortName: ["BANK OF", "UTAH"],
+    fullName: "Bank of Utah Championship",
+    startDate: "2026-10-01",
+    isMajor: false,
+  },
+  {
+    id: "pga-2026-baycurrent-classic",
+    shortName: ["BAY", "CURRENT"],
+    fullName: "Baycurrent Classic",
+    startDate: "2026-10-08",
+    isMajor: false,
+  },
+  {
+    id: "pga-2026-bermuda-championship",
+    shortName: ["BUTTER", "BERMUDA"],
+    fullName: "Butterfield Bermuda Championship",
+    startDate: "2026-10-22",
+    isMajor: false,
+  },
+  {
+    id: "pga-2026-mexico-open",
+    shortName: ["MEXICO", "OPEN"],
+    fullName: "VidantaWorld Mexico Open",
+    startDate: "2026-10-29",
+    isMajor: false,
+  },
+  {
+    id: "pga-2026-wwt-championship",
+    shortName: ["WWT", "CABOS"],
+    fullName: "World Wide Technology Championship",
+    startDate: "2026-11-05",
+    isMajor: false,
+  },
+  {
+    id: "pga-2026-austin-championship",
+    shortName: ["AUSTIN", "CHAMP."],
+    fullName: "Austin Championship",
+    startDate: "2026-11-12",
+    isMajor: false,
+  },
+  {
+    id: "pga-2026-rsm-classic",
+    shortName: ["RSM", "CLASSIC"],
+    fullName: "The RSM Classic",
+    startDate: "2026-11-19",
     isMajor: false,
   },
 ];

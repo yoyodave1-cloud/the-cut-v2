@@ -43,6 +43,15 @@ const PGA_EVENT_LINKS: Record<string, { tournId: string; slug: string }> = {
   'pga-2026-fedex-st-jude': { tournId: '047', slug: 'fedex-st-jude-championship' },
   'pga-2026-bmw-championship': { tournId: '027', slug: 'bmw-championship' },
   'pga-2026-tour-championship': { tournId: '060', slug: 'tour-championship' },
+  'pga-2026-biltmore-championship': { tournId: '557', slug: 'biltmore-championship-asheville' },
+  'pga-2026-presidents-cup': { tournId: '500', slug: 'presidents-cup' },
+  'pga-2026-bank-of-utah': { tournId: '554', slug: 'bank-of-utah-championship' },
+  'pga-2026-baycurrent-classic': { tournId: '527', slug: 'baycurrent-classic' },
+  'pga-2026-bermuda-championship': { tournId: '528', slug: 'butterfield-bermuda-championship' },
+  'pga-2026-mexico-open': { tournId: '540', slug: 'vidantaworld-mexico-open' },
+  'pga-2026-wwt-championship': { tournId: '457', slug: 'world-wide-technology-championship' },
+  'pga-2026-austin-championship': { tournId: '558', slug: 'good-good-championship' },
+  'pga-2026-rsm-classic': { tournId: '493', slug: 'the-rsm-classic' },
 };
 
 /** DP World Tour europeantour.com slugs (include season year). */
