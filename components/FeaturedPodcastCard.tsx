@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { FeaturedPodcastPick, openYouTubeVideo } from '../api';
 import { colors } from '../constants/colors';
 import { fetchPodcastArtwork } from '../lib/podcastArtwork';
+import WatchLaterButton from './WatchLaterButton';
 
 const THUMB = 112;
 
@@ -45,16 +46,19 @@ export default function FeaturedPodcastCard({ pick }: { pick: FeaturedPodcastPic
             {pick.title}
           </Text>
         </View>
-        {artworkUri ? (
-          <Image
-            source={{ uri: artworkUri }}
-            style={styles.compactThumb}
-            resizeMode="cover"
-            onError={() => setArtworkUri(null)}
-          />
-        ) : (
-          <PodcastThumbPlaceholder />
-        )}
+        <View style={{ width: THUMB, height: THUMB }}>
+          {artworkUri ? (
+            <Image
+              source={{ uri: artworkUri }}
+              style={styles.compactThumb}
+              resizeMode="cover"
+              onError={() => setArtworkUri(null)}
+            />
+          ) : (
+            <PodcastThumbPlaceholder />
+          )}
+          <WatchLaterButton videoId={pick.videoId} />
+        </View>
       </View>
     </TouchableOpacity>
   );

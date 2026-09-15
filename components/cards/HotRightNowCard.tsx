@@ -18,6 +18,7 @@ import {
 } from '../../api';
 import { useOpenArticle } from '../../ArticleReader';
 import CreatorAvatar from '../CreatorAvatar';
+import WatchLaterButton from '../WatchLaterButton';
 import { colors } from '../../constants/colors';
 
 const ACCENT = '#FF6B35';
@@ -68,6 +69,7 @@ function VideoFeaturedCard({
           resizeMode="cover"
           onError={logImageError('hot-right-now', video.thumbnailUrl)}
         />
+        <WatchLaterButton videoId={video.videoId} />
       </View>
       <Text style={styles.videoTitle} numberOfLines={2}>
         {video.title}

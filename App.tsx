@@ -11,14 +11,20 @@ import {
   BottomTabBarButtonProps,
   createBottomTabNavigator,
 } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import HomeScreen from './HomeScreen';
 import HomeTabScreen from './screens/HomeTabScreen';
+import WatchLaterPage from './screens/WatchLaterPage';
 import CreatorsStackNavigator from './navigation/CreatorsStackNavigator';
 import { colors } from './constants/colors';
+import { AuthProvider } from './context/AuthContext';
+import { WatchLaterProvider } from './context/WatchLaterContext';
+import type { MainTabParamList, RootStackParamList } from './navigation/rootStackTypes';
 
-const Tab = createBottomTabNavigator();
+const Tab = createBottomTabNavigator<MainTabParamList>();
+const RootStack = createNativeStackNavigator<RootStackParamList>();
 
 const TAB_BAR_CONTENT_HEIGHT = 28;
 
@@ -103,9 +109,16 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
-        <MainTabs />
-      </NavigationContainer>
+      <AuthProvider>
+        <WatchLaterProvider>
+          <NavigationContainer>
+            <RootStack.Navigator id="RootStack" screenOptions={{ headerShown: false }}>
+              <RootStack.Screen name="MainTabs" component={MainTabs} />
+              <RootStack.Screen name="WatchLater" component={WatchLaterPage} />
+            </RootStack.Navigator>
+          </NavigationContainer>
+        </WatchLaterProvider>
+      </AuthProvider>
     </SafeAreaProvider>
   );
 }

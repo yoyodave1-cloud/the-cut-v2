@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Image, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect, useIsFocused } from '@react-navigation/native';
+import { Animated, Easing, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect, useIsFocused, useNavigation } from '@react-navigation/native';
 import { StatusBar, setStatusBarStyle } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
+import { useAuth, userAvatarUrl, userDisplayName } from '../context/AuthContext';
+import CreatorAvatar from './CreatorAvatar';
 
 const HEADER_STRAPLINE = 'Pro golf · Creator golf · All golf';
 const LOGO_SPIN_MS = 4000;
@@ -13,6 +15,8 @@ const STRAPLINE_TYPE_MS = 2000;
 export default function HomeHeader() {
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
+  const navigation = useNavigation();
+  const { isSignedIn, user } = useAuth();
   const spin = useRef(new Animated.Value(0)).current;
   const [typed, setTyped] = useState('');
 
@@ -81,9 +85,26 @@ export default function HomeHeader() {
             {typed}
           </Text>
         </View>
-        <View style={styles.profileButton}>
-          <Ionicons name="person-outline" size={16} color="#FFFFFF" />
-        </View>
+        <TouchableOpacity
+          style={styles.profileButton}
+          onPress={() => {
+            const tabs = navigation.getParent();
+            const root = tabs?.getParent() ?? tabs ?? navigation;
+            root.navigate('WatchLater' as never);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Watch Later"
+        >
+          {isSignedIn ? (
+            <CreatorAvatar
+              name={userDisplayName(user) || 'You'}
+              avatarUrl={userAvatarUrl(user)}
+              size={32}
+            />
+          ) : (
+            <Ionicons name="person-outline" size={16} color="#FFFFFF" />
+          )}
+        </TouchableOpacity>
       </View>
     </>
   );
@@ -140,5 +161,6 @@ const styles = StyleSheet.create({
     borderColor: colors.mutedGrey,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
 });

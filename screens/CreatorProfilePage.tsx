@@ -14,6 +14,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import CreatorAvatar from '../components/CreatorAvatar';
 import ProfileYoutubeThumb from '../components/ProfileYoutubeThumb';
+import WatchLaterButton from '../components/WatchLaterButton';
 import { fetchCreatorVideos, type CreatorVideoRow } from '../api';
 import {
   getCreatorById,
@@ -244,6 +245,7 @@ export default function CreatorProfilePage() {
                       borderRadius={8}
                     />
                     {isNewest ? <View style={styles.redDot} /> : null}
+                    <WatchLaterButton videoId={v.videoId} />
                   </View>
                   <View style={styles.shortRightCol}>
                     <View>
@@ -281,6 +283,7 @@ export default function CreatorProfilePage() {
                   borderRadius={8}
                 />
                 {isNewest ? <View style={styles.redDot} /> : null}
+                <WatchLaterButton videoId={v.videoId} />
               </View>
               <Text style={styles.videoTitle} numberOfLines={2}>
                 {v.title}

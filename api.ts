@@ -1058,3 +1058,69 @@ export function useFeaturedSections(): FeaturedSectionsResponse {
 
   return payload;
 }
+
+export type VideoSource = 'creator_videos' | 'short_game_videos';
+
+export type WatchLaterItem = {
+  id: number;
+  videoId: string;
+  videoSource: VideoSource;
+  savedAt: string;
+  title: string;
+  thumbnailUrl?: string;
+  watchUrl: string;
+  creator?: { name: string; avatarUrl?: string };
+};
+
+function watchLaterItemToVideo(item: WatchLaterItem): VideoItem {
+  return {
+    videoId: item.videoId,
+    title: item.title,
+    publishedAt: item.savedAt,
+    thumbnailUrl: item.thumbnailUrl,
+    creator: item.creator,
+  };
+}
+
+export function watchLaterAsVideoItem(item: WatchLaterItem): VideoItem {
+  return watchLaterItemToVideo(item);
+}
+
+async function authRequest(
+  path: string,
+  accessToken: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.set('Authorization', `Bearer ${accessToken}`);
+  if (init.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+  return fetch(`${API_BASE}${path}`, { ...init, headers });
+}
+
+export async function fetchWatchLater(accessToken: string): Promise<WatchLaterItem[]> {
+  const res = await authRequest('/watch-later', accessToken);
+  if (!res.ok) throw new Error(`watch-later failed (${res.status})`);
+  const json = (await res.json()) as { videos?: WatchLaterItem[] };
+  return Array.isArray(json.videos) ? json.videos : [];
+}
+
+export async function saveWatchLater(
+  accessToken: string,
+  videoId: string,
+  videoSource: VideoSource,
+): Promise<number | null> {
+  const res = await authRequest('/watch-later', accessToken, {
+    method: 'POST',
+    body: JSON.stringify({ videoId, videoSource }),
+  });
+  if (!res.ok) throw new Error(`save watch-later failed (${res.status})`);
+  const json = (await res.json()) as { id?: number | null };
+  return json.id ?? null;
+}
+
+export async function deleteWatchLater(accessToken: string, id: number): Promise<void> {
+  const res = await authRequest(`/watch-later/${id}`, accessToken, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`delete watch-later failed (${res.status})`);
+}

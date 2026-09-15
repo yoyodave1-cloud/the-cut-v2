@@ -22,6 +22,7 @@ import {
   FeaturedPodcastPick,
   ShortGameVideo,
   VideoItem,
+  VideoSource,
   fetchCreatorFeaturedPodcastShorts,
   fetchDailyFeaturedPodcastPicks,
   fetchDailyInstructionalSelection,
@@ -550,6 +551,8 @@ function CreatorGolfBlock({
   last,
   carousel = 'video',
   tornVariant,
+  videoSource = 'creator_videos',
+  masterclassSource = 'short_game_videos',
 }: {
   subtitle: string;
   videos: VideoItem[];
@@ -563,6 +566,8 @@ function CreatorGolfBlock({
   last?: boolean;
   carousel?: 'video' | 'shorts';
   tornVariant: number;
+  videoSource?: VideoSource;
+  masterclassSource?: VideoSource;
 }) {
   const hasMasterclassCarousel = (masterclassVideos?.length ?? 0) > 0;
   return (
@@ -577,6 +582,7 @@ function CreatorGolfBlock({
                 <MasterclassVideoCard
                   key={video.id || video.youtubeVideoId}
                   video={video}
+                  videoSource={masterclassSource}
                 />
               ))}
             </ScrollView>
@@ -600,6 +606,7 @@ function CreatorGolfBlock({
                   key={pick.video.videoId}
                   video={pick.video}
                   subTopic={pick.subTopic}
+                  videoSource={videoSource}
                 />
               ))
             : (articles ?? []).map((article) => (
@@ -818,6 +825,8 @@ function HomeTabBody() {
           seeAllLabel="See all instruction →"
           onSeeAll={goCreators}
           tornVariant={5}
+          videoSource="short_game_videos"
+          masterclassSource="short_game_videos"
         />
 
         <TourGolfBlock
@@ -838,6 +847,8 @@ function HomeTabBody() {
           onSeeAll={goCreators}
           last
           tornVariant={7}
+          videoSource="creator_videos"
+          masterclassSource="creator_videos"
         />
       </ScrollView>
     </View>

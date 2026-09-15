@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import {
   VideoItem,
+  VideoSource,
   logImageError,
   openYouTubeShort,
   openYouTubeVideo,
@@ -19,6 +20,7 @@ import {
 import { colors } from '../constants/colors';
 import { youtubeOar2Uri } from '../constants/creators';
 import ProfileYoutubeThumb from './ProfileYoutubeThumb';
+import WatchLaterButton from './WatchLaterButton';
 
 export function formatVideoTimeAgo(iso: string) {
   if (!iso) return '';
@@ -43,6 +45,7 @@ export function FeaturedVideoCard({
   creatorAvatarUrl,
   publishedAt,
   viewCount,
+  videoSource = 'creator_videos',
 }: {
   video?: VideoItem;
   tag?: string;
@@ -55,6 +58,7 @@ export function FeaturedVideoCard({
   creatorAvatarUrl?: string;
   publishedAt?: string;
   viewCount?: number;
+  videoSource?: VideoSource;
 }) {
   const resolved: VideoItem = video ?? {
     videoId: youtubeVideoId ?? '',
@@ -88,6 +92,7 @@ export function FeaturedVideoCard({
         <View style={styles.playButtonOverlay}>
           <Ionicons name="play" size={16} color="#FFFFFF" />
         </View>
+        <WatchLaterButton videoId={resolved.videoId} videoSource={videoSource} />
       </View>
       <View style={{ padding: 12 }}>
         {tag ? <Text style={styles.tagLabel}>{tag}</Text> : null}
@@ -106,10 +111,12 @@ export function ShortsCarousel({
   shorts,
   tag,
   title,
+  videoSource = 'creator_videos',
 }: {
   shorts: VideoItem[];
   tag?: string;
   title?: string;
+  videoSource?: VideoSource;
 }) {
   if (!shorts.length) return null;
   const showHeader = Boolean(tag || title);
@@ -142,6 +149,7 @@ export function ShortsCarousel({
                 resizeMode="cover"
                 onError={logImageError('short-carousel', thumb)}
               />
+              <WatchLaterButton videoId={s.videoId} videoSource={videoSource} />
               <Svg
                 width={180}
                 height={320}
@@ -169,7 +177,15 @@ export function ShortsCarousel({
   );
 }
 
-export function FullBleedShort({ short, tag }: { short: VideoItem; tag: string }) {
+export function FullBleedShort({
+  short,
+  tag,
+  videoSource = 'creator_videos',
+}: {
+  short: VideoItem;
+  tag: string;
+  videoSource?: VideoSource;
+}) {
   const thumb = videoThumbnailUri(short);
   return (
     <TouchableOpacity
@@ -183,6 +199,7 @@ export function FullBleedShort({ short, tag }: { short: VideoItem; tag: string }
         resizeMode="cover"
         onError={logImageError('full-bleed-short', thumb)}
       />
+      <WatchLaterButton videoId={short.videoId} videoSource={videoSource} />
       <View style={styles.fullBleedTagWrap}>
         <Text style={styles.fullBleedTag}>{tag}</Text>
       </View>
@@ -206,11 +223,13 @@ export function VideoCarousel({
   tag,
   title,
   subtitle,
+  videoSource = 'creator_videos',
 }: {
   videos: VideoItem[];
   tag?: string;
   title?: string;
   subtitle?: string;
+  videoSource?: VideoSource;
 }) {
   if (!videos.length) return null;
   const showHeader = Boolean(tag || title || subtitle);
@@ -229,11 +248,14 @@ export function VideoCarousel({
               activeOpacity={0.8}
               onPress={() => openYouTubeVideo(v.videoId)}
             >
-              <Image
-                source={{ uri: thumb }}
-                style={styles.carouselThumb}
-                onError={logImageError('video-carousel', thumb)}
-              />
+              <View>
+                <Image
+                  source={{ uri: thumb }}
+                  style={styles.carouselThumb}
+                  onError={logImageError('video-carousel', thumb)}
+                />
+                <WatchLaterButton videoId={v.videoId} videoSource={videoSource} />
+              </View>
               <Text style={styles.carouselTitle} numberOfLines={2}>
                 {v.title}
               </Text>
@@ -390,7 +412,13 @@ function useOar2IsPortrait(videoId: string): boolean | null {
   return portrait;
 }
 
-function PodcastMixedItem({ item }: { item: VideoItem }) {
+function PodcastMixedItem({
+  item,
+  videoSource = 'creator_videos',
+}: {
+  item: VideoItem;
+  videoSource?: VideoSource;
+}) {
   const portrait = useOar2IsPortrait(item.videoId);
   const isShortCard = portrait === true || (portrait === null && item.isShort === true);
 
@@ -409,6 +437,7 @@ function PodcastMixedItem({ item }: { item: VideoItem }) {
             height={PODCAST_MIXED_HEIGHT}
             borderRadius={8}
           />
+          <WatchLaterButton videoId={item.videoId} videoSource={videoSource} />
         </View>
       </TouchableOpacity>
     );
@@ -427,16 +456,23 @@ function PodcastMixedItem({ item }: { item: VideoItem }) {
         resizeMode="cover"
         onError={logImageError('podcast-mixed-video', thumb)}
       />
+      <WatchLaterButton videoId={item.videoId} videoSource={videoSource} />
     </TouchableOpacity>
   );
 }
 
-export function PodcastMixedCarousel({ videos }: { videos: VideoItem[] }) {
+export function PodcastMixedCarousel({
+  videos,
+  videoSource = 'creator_videos',
+}: {
+  videos: VideoItem[];
+  videoSource?: VideoSource;
+}) {
   if (!videos.length) return null;
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
       {videos.map((item) => (
-        <PodcastMixedItem key={item.videoId} item={item} />
+        <PodcastMixedItem key={item.videoId} item={item} videoSource={videoSource} />
       ))}
     </ScrollView>
   );

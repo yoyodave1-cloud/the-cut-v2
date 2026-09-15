@@ -12,10 +12,12 @@ import {
   MasterclassMainTopic,
   MasterclassMainTopicGroup,
   ShortGameVideo,
+  VideoSource,
   logImageError,
   openYouTubeVideo,
 } from '../api';
 import { colors } from '../constants/colors';
+import WatchLaterButton from './WatchLaterButton';
 
 /** Matches VideoCarousel card/thumbnail sizing on CreatorPage. */
 const CARD_WIDTH = 240;
@@ -43,7 +45,13 @@ function thumbnailUri(video: ShortGameVideo) {
   );
 }
 
-export function MasterclassVideoCard({ video }: { video: ShortGameVideo }) {
+export function MasterclassVideoCard({
+  video,
+  videoSource = 'short_game_videos',
+}: {
+  video: ShortGameVideo;
+  videoSource?: VideoSource;
+}) {
   const thumb = thumbnailUri(video);
   return (
     <TouchableOpacity
@@ -51,12 +59,15 @@ export function MasterclassVideoCard({ video }: { video: ShortGameVideo }) {
       activeOpacity={0.8}
       onPress={() => openYouTubeVideo(video.youtubeVideoId)}
     >
-      <Image
-        source={{ uri: thumb }}
-        style={styles.thumb}
-        resizeMode="cover"
-        onError={logImageError('short-game-masterclass', thumb)}
-      />
+      <View>
+        <Image
+          source={{ uri: thumb }}
+          style={styles.thumb}
+          resizeMode="cover"
+          onError={logImageError('short-game-masterclass', thumb)}
+        />
+        <WatchLaterButton videoId={video.youtubeVideoId} videoSource={videoSource} />
+      </View>
       <Text style={styles.videoTitle} numberOfLines={2}>
         {video.title}
       </Text>

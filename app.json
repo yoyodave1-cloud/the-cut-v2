@@ -11,6 +11,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.provailai.thecut",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -20,7 +21,14 @@
     "plugins": [
       "expo-font",
       "expo-video",
-      "expo-updates"
+      "expo-updates",
+      "expo-apple-authentication",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.479013467423-ir4k2lhi81p7bp8ncdhb60bp0d330tju"
+        }
+      ]
     ],
     "owner": "thecutgolf-app",
     "extra": {
