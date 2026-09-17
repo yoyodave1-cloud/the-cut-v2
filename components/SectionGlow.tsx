@@ -13,7 +13,7 @@ type WashLayout = {
   topRatio: number;
 };
 
-export type SectionGlowVariant = 'default' | 'intro';
+export type SectionGlowVariant = 'default' | 'intro' | 'swapped';
 
 type Stops = { offset: string; color: string; opacity: number }[];
 
@@ -52,6 +52,12 @@ const WASHES: WashLayout[] = [
   { tone: 'violet', widthRatio: 1.85, heightRatio: 1.05, leftRatio: -0.1, topRatio: -0.17 },
 ];
 
+/** Same geometry as WASHES with the two tones flipped (violet sits where cyan usually does). */
+const SWAPPED_WASHES: WashLayout[] = WASHES.map((wash) => ({
+  ...wash,
+  tone: wash.tone === 'cyan' ? 'violet' : 'cyan',
+}));
+
 /** Taller, lower washes so Home intro glow still covers the headline block and meets the video arc. */
 const INTRO_WASHES: WashLayout[] = [
   { tone: 'cyan', widthRatio: 1.9, heightRatio: 1.7, leftRatio: -0.75, topRatio: -0.08 },
@@ -76,7 +82,8 @@ export function SectionGlowPaint({
   idPrefix: string;
   variant?: SectionGlowVariant;
 }) {
-  const washes = variant === 'intro' ? INTRO_WASHES : WASHES;
+  const washes =
+    variant === 'intro' ? INTRO_WASHES : variant === 'swapped' ? SWAPPED_WASHES : WASHES;
   return (
     <G opacity={sectionGlowIntensity(scheme)}>
       {washes.map((wash) => {

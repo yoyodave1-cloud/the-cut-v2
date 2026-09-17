@@ -17,6 +17,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import HomeScreen from './HomeScreen';
 import HomeTabScreen from './screens/HomeTabScreen';
 import WatchLaterPage from './screens/WatchLaterPage';
+import LessonLibraryScreen from './screens/LessonLibraryScreen';
 import CreatorsStackNavigator from './navigation/CreatorsStackNavigator';
 import { colors } from './constants/colors';
 import { AuthProvider } from './context/AuthContext';
@@ -88,6 +89,16 @@ function MainTabs() {
           ),
         }}
       />
+      <Tab.Screen
+        name="Academy"
+        component={LessonLibraryScreen}
+        options={{
+          tabBarLabel: 'Academy',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="school-outline" size={size} color={color} />
+          ),
+        }}
+      />
     </Tab.Navigator>
   );
 }
@@ -115,6 +126,7 @@ export default function App() {
             <RootStack.Navigator id="RootStack" screenOptions={{ headerShown: false }}>
               <RootStack.Screen name="MainTabs" component={MainTabs} />
               <RootStack.Screen name="WatchLater" component={WatchLaterPage} />
+              <RootStack.Screen name="LessonLibrary" component={LessonLibraryScreen} />
             </RootStack.Navigator>
           </NavigationContainer>
         </WatchLaterProvider>

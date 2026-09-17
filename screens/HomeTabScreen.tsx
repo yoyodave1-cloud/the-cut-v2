@@ -752,6 +752,11 @@ function HomeTabBody() {
 
   const goTour = () => navigation.navigate('Tour' as never);
   const goCreators = () => navigation.navigate('Creators' as never);
+  const goLessonLibrary = () => {
+    const tabs = navigation.getParent();
+    const root = tabs?.getParent() ?? tabs ?? navigation;
+    root.navigate('LessonLibrary' as never);
+  };
 
   return (
     <View style={styles.root}>
@@ -823,7 +828,7 @@ function HomeTabBody() {
           featuredVideos={feed.instructional.featured}
           topicLabel={feed.instructional.topic}
           seeAllLabel="See all instruction →"
-          onSeeAll={goCreators}
+          onSeeAll={goLessonLibrary}
           tornVariant={5}
           videoSource="short_game_videos"
           masterclassSource="short_game_videos"

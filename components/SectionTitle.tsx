@@ -144,3 +144,5 @@ const styles = StyleSheet.create({
   },
   sectionTitleSmallLight: { color: colors.navy },
 });
+
+export { styles as sectionTitleStyles };

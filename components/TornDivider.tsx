@@ -2,7 +2,7 @@ import React, { useId } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Svg, { ClipPath, Defs, G, Polygon, Rect } from 'react-native-svg';
 import { colors } from '../constants/colors';
-import { SectionGlowPaint } from './SectionGlow';
+import { SectionGlowPaint, type SectionGlowVariant } from './SectionGlow';
 
 /**
  * Polygon point-sets ported 1:1 from homepage_mockup.html (viewBox 0 0 390 34).
@@ -37,6 +37,8 @@ type TornDividerProps = {
   /** Following section’s laid-out size — wash is sampled in that space and clipped to the tear. */
   sectionWidth?: number;
   sectionHeight?: number;
+  /** Must match the following section’s SectionGlow so the tear samples the same wash. */
+  glowVariant?: SectionGlowVariant;
 };
 
 function scalePoints(points: string, width: number, height: number, srcW: number, srcH: number) {
@@ -56,6 +58,7 @@ export default function TornDivider({
   height = DEFAULT_HEIGHT,
   sectionWidth = 0,
   sectionHeight = 0,
+  glowVariant = 'default',
 }: TornDividerProps) {
   const reactId = useId().replace(/[^a-zA-Z0-9]/g, '');
   const clipId = `tear-${reactId}`;
@@ -92,6 +95,7 @@ export default function TornDivider({
                 scheme={scheme}
                 width={sectionWidth}
                 height={sectionHeight}
+                variant={glowVariant}
                 idPrefix={`td-${reactId}`}
               />
             </G>
