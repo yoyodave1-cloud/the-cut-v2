@@ -62,6 +62,7 @@ export default function SignInSheet({ visible, onClose }: Props) {
             )
           ) : null}
 
+          {/* Google Sign-In disabled — native iOS SDK auto-embeds a nonce that this library version can't expose, causing a Supabase auth mismatch. Needs either a switch to expo-auth-session or a native patch. Re-enable once fixed.
           <TouchableOpacity
             style={styles.googleButton}
             activeOpacity={0.85}
@@ -77,6 +78,7 @@ export default function SignInSheet({ visible, onClose }: Props) {
               </>
             )}
           </TouchableOpacity>
+          */}
 
           <TouchableOpacity onPress={onClose} style={styles.cancelWrap} disabled={busy != null}>
             <Text style={styles.cancel}>Not now</Text>
